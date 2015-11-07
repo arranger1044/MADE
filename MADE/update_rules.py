@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 import theano
 import theano.tensor as T
@@ -28,7 +29,8 @@ class DecreasingLearningRate(object):
         updates = OrderedDict()
 
         for param in grads.keys():
-            decreased_learning_rate = T.cast(self.learning_rate / (1 + (self.decrease_constant * self.current_iteration)), dtype=theano.config.floatX)
+            decreased_learning_rate = T.cast(
+                self.learning_rate / (1 + (self.decrease_constant * self.current_iteration)), dtype=theano.config.floatX)
             updates[param] = param - decreased_learning_rate * grads[param]
 
         updates[self.current_iteration] = self.current_iteration + 1
@@ -51,7 +53,8 @@ class AdaGrad(object):
 
         for param in grads.keys():
             # sum_squared_grad := \sum g_t^2
-            sum_squared_grad = theano.shared(theano._asarray(param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
+            sum_squared_grad = theano.shared(theano._asarray(
+                param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
             self.parameters.append(sum_squared_grad)
 
             # Accumulate gradient
@@ -93,14 +96,17 @@ class AdaDelta(object):
 
         for param in grads.keys():
             # mean_squared_grad := E[g^2]_{t-1}
-            mean_square_grad = theano.shared(theano._asarray(param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
+            mean_square_grad = theano.shared(theano._asarray(
+                param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
             self.parameters.append(mean_square_grad)
             # mean_square_dx := E[(\Delta x)^2]_{t-1}
-            mean_square_dx = theano.shared(theano._asarray(param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_dx_' + param.name, borrow=False)
+            mean_square_dx = theano.shared(theano._asarray(
+                param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_dx_' + param.name, borrow=False)
             self.parameters.append(mean_square_dx)
 
             # Accumulate gradient
-            new_mean_squared_grad = self.decay * mean_square_grad + (1 - self.decay) * T.sqr(grads[param])
+            new_mean_squared_grad = self.decay * mean_square_grad + \
+                (1 - self.decay) * T.sqr(grads[param])
 
             # Compute update
             rms_dx_tm1 = T.sqrt(mean_square_dx + self.epsilon)
@@ -220,11 +226,13 @@ class RMSProp(object):
 
         for param in grads.keys():
             # mean_squared_grad := \sum g_t^2
-            mean_squared_grad = theano.shared(theano._asarray(param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
+            mean_squared_grad = theano.shared(theano._asarray(
+                param.get_value() * 0., dtype=theano.config.floatX), name='mean_square_grad_' + param.name, borrow=False)
             self.parameters.append(mean_squared_grad)
 
             # Accumulate gradient
-            new_mean_squared_grad = T.cast(self.decay * mean_squared_grad + (1 - self.decay) * T.sqr(grads[param]), dtype=theano.config.floatX)
+            new_mean_squared_grad = T.cast(
+                self.decay * mean_squared_grad + (1 - self.decay) * T.sqr(grads[param]), dtype=theano.config.floatX)
 
             # Compute update
             root_mean_squared = T.sqrt(new_mean_squared_grad + self.epsilon)

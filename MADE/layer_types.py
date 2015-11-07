@@ -15,8 +15,10 @@ class Layer(object):
         self.weights_initialization = weights_initialization
 
         # Init weights and biases
-        self.W = theano.shared(value=weights_initialization((n_in, n_out)), name='W{}'.format(layerIdx), borrow=True)
-        self.b = theano.shared(value=np.zeros((n_out,), dtype=theano.config.floatX), name='b{}'.format(layerIdx), borrow=True)
+        self.W = theano.shared(value=weights_initialization(
+            (n_in, n_out)), name='W{}'.format(layerIdx), borrow=True)
+        self.b = theano.shared(
+            value=np.zeros((n_out,), dtype=theano.config.floatX), name='b{}'.format(layerIdx), borrow=True)
 
         # Output
         self.lin_output = T.dot(input, self.W) + self.b
@@ -38,12 +40,14 @@ class MaskedLayer(Layer):
         Layer.__init__(self, **kargs)
 
         self.mask_generator = mask_generator
-        self.weights_mask = theano.shared(value=np.ones((self.n_in, self.n_out), dtype=theano.config.floatX), name='weights_mask{}'.format(self.layerIdx), borrow=True)
+        self.weights_mask = theano.shared(value=np.ones(
+            (self.n_in, self.n_out), dtype=theano.config.floatX), name='weights_mask{}'.format(self.layerIdx), borrow=True)
 
         # Output
         self.lin_output = T.dot(self.input, self.W * self.weights_mask) + self.b
 
-        self.shuffle_update = [(self.weights_mask, mask_generator.get_mask_layer_UPDATE(self.layerIdx))]
+        self.shuffle_update = [
+            (self.weights_mask, mask_generator.get_mask_layer_UPDATE(self.layerIdx))]
 
 
 class ConditionningMaskedLayer(MaskedLayer):
@@ -52,7 +56,8 @@ class ConditionningMaskedLayer(MaskedLayer):
         MaskedLayer.__init__(self, **kargs)
 
         if use_cond_mask:
-            self.U = theano.shared(value=self.weights_initialization((self.n_in, self.n_out)), name='U{}'.format(self.layerIdx), borrow=True)
+            self.U = theano.shared(value=self.weights_initialization(
+                (self.n_in, self.n_out)), name='U{}'.format(self.layerIdx), borrow=True)
 
             # Output
             self.lin_output += T.dot(T.ones_like(self.input), self.U * self.weights_mask)
@@ -66,16 +71,19 @@ class DirectInputConnectConditionningMaskedLayer(ConditionningMaskedLayer):
         ConditionningMaskedLayer.__init__(self, **kargs)
 
         if direct_input is not None:
-            self.direct_input_weights_mask = theano.shared(value=np.ones((self.mask_generator._input_size, self.n_out), dtype=theano.config.floatX), name='direct_input_weights_mask{}'.format(self.layerIdx), borrow=True)
+            self.direct_input_weights_mask = theano.shared(value=np.ones(
+                (self.mask_generator._input_size, self.n_out), dtype=theano.config.floatX), name='direct_input_weights_mask{}'.format(self.layerIdx), borrow=True)
 
-            self.D = theano.shared(value=self.weights_initialization((self.mask_generator._input_size, self.n_out)), name='D{}'.format(self.layerIdx), borrow=True)
+            self.D = theano.shared(value=self.weights_initialization(
+                (self.mask_generator._input_size, self.n_out)), name='D{}'.format(self.layerIdx), borrow=True)
 
             # Output
             self.lin_output += T.dot(direct_input, self.D * self.direct_input_weights_mask)
 
             self.params += [self.D]
 
-            self.shuffle_update += [(self.direct_input_weights_mask, self.mask_generator.get_direct_input_mask_layer_UPDATE(self.layerIdx + 1))]
+            self.shuffle_update += [(self.direct_input_weights_mask,
+                                     self.mask_generator.get_direct_input_mask_layer_UPDATE(self.layerIdx + 1))]
 
 
 class DirectOutputInputConnectConditionningMaskedOutputLayer(DirectInputConnectConditionningMaskedLayer):
@@ -86,16 +94,20 @@ class DirectOutputInputConnectConditionningMaskedOutputLayer(DirectInputConnectC
         self.direct_ouputs_masks = []
         for direct_out_layerIdx, n_direct_out, direct_output in direct_outputs:
 
-            direct_ouput_weights_mask = theano.shared(value=np.ones((n_direct_out, self.n_out), dtype=theano.config.floatX), name='direct_output_weights_mask{}'.format(self.layerIdx), borrow=True)
-            direct_ouput_weight = theano.shared(value=self.weights_initialization((n_direct_out, self.n_out)), name='direct_ouput_weight{}'.format(self.layerIdx), borrow=True)
+            direct_ouput_weights_mask = theano.shared(value=np.ones(
+                (n_direct_out, self.n_out), dtype=theano.config.floatX), name='direct_output_weights_mask{}'.format(self.layerIdx), borrow=True)
+            direct_ouput_weight = theano.shared(value=self.weights_initialization(
+                (n_direct_out, self.n_out)), name='direct_ouput_weight{}'.format(self.layerIdx), borrow=True)
 
             # Output
-            self.lin_output += T.dot(direct_output, direct_ouput_weight * direct_ouput_weights_mask)
+            self.lin_output += T.dot(direct_output,
+                                     direct_ouput_weight * direct_ouput_weights_mask)
 
             self.direct_ouputs_masks += [direct_ouput_weights_mask]
             self.params += [direct_ouput_weight]
 
-            self.shuffle_update += [(direct_ouput_weights_mask, self.mask_generator.get_direct_output_mask_layer_UPDATE(direct_out_layerIdx))]
+            self.shuffle_update += [(direct_ouput_weights_mask,
+                                     self.mask_generator.get_direct_output_mask_layer_UPDATE(direct_out_layerIdx))]
 
 
 def dropoutLayerDecorator(layer, trng, is_train, dropout_rate):

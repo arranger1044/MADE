@@ -1,12 +1,14 @@
 from __future__ import division
+from __future__ import absolute_import
 import numpy as np
 import theano
 import theano.tensor as T
 
-from update_rules import DecreasingLearningRate, AdaGrad, AdaDelta, RMSProp, Adam, Adam_paper
-from layer_types import ConditionningMaskedLayer, dropoutLayerDecorator, DirectInputConnectConditionningMaskedLayer, DirectOutputInputConnectConditionningMaskedOutputLayer  # , MaskGenerator
-from mask_generator import MaskGenerator
-from weights_initializer import WeightsInitializer
+from .update_rules import DecreasingLearningRate, AdaGrad, AdaDelta, RMSProp, Adam, Adam_paper
+# , MaskGenerator
+from .layer_types import ConditionningMaskedLayer, dropoutLayerDecorator, DirectInputConnectConditionningMaskedLayer, DirectOutputInputConnectConditionningMaskedOutputLayer
+from .mask_generator import MaskGenerator
+from .weights_initializer import WeightsInitializer
 
 
 class MADE(object):
@@ -41,7 +43,9 @@ class MADE(object):
 
         self.trng = T.shared_randomstreams.RandomStreams(self.seed_generator.get())
 
-        weights_initialization = getattr(WeightsInitializer(self.seed_generator.get()), weights_initialization)  # Get the weights initializer by string name
+        # Get the weights initializer by string name
+        weights_initialization = getattr(
+            WeightsInitializer(self.seed_generator.get()), weights_initialization)
 
         # Building the model's graph
         input = T.matrix(name="input")
@@ -49,7 +53,8 @@ class MADE(object):
         is_train = T.bscalar(name="is_train")
 
         # Initialize the mask
-        self.mask_generator = MaskGenerator(input_size, hidden_sizes, mask_distribution, self.seed_generator.get())
+        self.mask_generator = MaskGenerator(
+            input_size, hidden_sizes, mask_distribution, self.seed_generator.get())
 
         # Initialize layers
         input_layer = ConditionningMaskedLayer(layerIdx=0,
@@ -79,19 +84,22 @@ class MADE(object):
         previous_layer = self.layers[outputLayerIdx - 1]
         self.layers += [DirectOutputInputConnectConditionningMaskedOutputLayer(layerIdx=outputLayerIdx,
                                                                                input=previous_layer.output,
-                                                                               n_in=hidden_sizes[outputLayerIdx - 1],
+                                                                               n_in=hidden_sizes[
+                                                                                   outputLayerIdx - 1],
                                                                                n_out=input_size,
                                                                                activation=T.nnet.sigmoid,
                                                                                weights_initialization=weights_initialization,
                                                                                mask_generator=self.mask_generator,
                                                                                use_cond_mask=use_cond_mask,
-                                                                               direct_input=input if (direct_input_connect == "Full" or direct_input_connect == "Output") and previous_layer.output != input else None,
+                                                                               direct_input=input if (
+                                                                                   direct_input_connect == "Full" or direct_input_connect == "Output") and previous_layer.output != input else None,
                                                                                direct_outputs=[(layer.layer_idx, layer.n_in, layer.input) for layerIdx, layer in enumerate(self.layers[1:-1])] if direct_output_connect else [])]
 
         # The loss function
         output = self.layers[-1].output
         pre_output = self.layers[-1].lin_output
-        log_prob = -T.sum(T.nnet.softplus(-target * pre_output + (1 - target) * pre_output), axis=1)
+        log_prob = - \
+            T.sum(T.nnet.softplus(-target * pre_output + (1 - target) * pre_output), axis=1)
         loss = (-log_prob).mean()
 
         # How to update the parameters
@@ -111,10 +119,11 @@ class MADE(object):
             self.update_rule = Adam(learning_rate=learning_rate)
         elif update_rule == "adam_paper":
             self.update_rule = Adam_paper(learning_rate=learning_rate)
-        updates = self.update_rule.get_updates(zip(self.parameters, parameters_gradient))
+        updates = self.update_rule.get_updates(list(zip(self.parameters, parameters_gradient)))
 
         # How to to shuffle weights
-        masks_updates = [layer_mask_update for layer in self.layers for layer_mask_update in layer.shuffle_update]
+        masks_updates = [
+            layer_mask_update for layer in self.layers for layer_mask_update in layer.shuffle_update]
         self.update_masks = theano.function(name='update_masks',
                                             inputs=[],
                                             updates=masks_updates)
@@ -125,7 +134,8 @@ class MADE(object):
                                      inputs=[index, is_train],
                                      outputs=loss,
                                      updates=updates,
-                                     givens={input: dataset['train']['data'][index * batch_size:(index + 1) * batch_size], target: dataset['train']['data'][index * batch_size:(index + 1) * batch_size]},
+                                     givens={input: dataset['train']['data'][
+                                         index * batch_size:(index + 1) * batch_size], target: dataset['train']['data'][index * batch_size:(index + 1) * batch_size]},
                                      on_unused_input='ignore')  # ignore for when dropout is absent
 
         self.use = theano.function(name='use',
@@ -137,22 +147,26 @@ class MADE(object):
         self.valid_log_prob = theano.function(name='valid_log_prob',
                                               inputs=[is_train],
                                               outputs=log_prob,
-                                              givens={input: dataset['valid']['data'], target: dataset['valid']['data']},
+                                              givens={
+                                                  input: dataset['valid']['data'], target: dataset['valid']['data']},
                                               on_unused_input='ignore')  # ignore for when dropout is absent
         self.train_log_prob = theano.function(name='train_log_prob',
                                               inputs=[is_train],
                                               outputs=log_prob,
-                                              givens={input: dataset['train']['data'], target: dataset['train']['data']},
+                                              givens={
+                                                  input: dataset['train']['data'], target: dataset['train']['data']},
                                               on_unused_input='ignore')  # ignore for when dropout is absent
         self.train_log_prob_batch = theano.function(name='train_log_prob_batch',
                                                     inputs=[index, is_train],
                                                     outputs=log_prob,
-                                                    givens={input: dataset['train']['data'][index * 1000:(index + 1) * 1000], target: dataset['train']['data'][index * 1000:(index + 1) * 1000]},
+                                                    givens={input: dataset['train']['data'][
+                                                        index * 1000:(index + 1) * 1000], target: dataset['train']['data'][index * 1000:(index + 1) * 1000]},
                                                     on_unused_input='ignore')  # ignore for when dropout is absent
         self.test_log_prob = theano.function(name='test_log_prob',
                                              inputs=[is_train],
                                              outputs=log_prob,
-                                             givens={input: dataset['test']['data'], target: dataset['test']['data']},
+                                             givens={
+                                                 input: dataset['test']['data'], target: dataset['test']['data']},
                                              on_unused_input='ignore')  # ignore for when dropout is absent
 
         # Functions for verify gradient
@@ -163,7 +177,8 @@ class MADE(object):
         self.learngrad = theano.function(name='learn',
                                          inputs=[index, is_train],
                                          outputs=parameters_gradient,
-                                         givens={input: dataset['train']['data'][index * batch_size:(index + 1) * batch_size], target: dataset['train']['data'][index * batch_size:(index + 1) * batch_size]},
+                                         givens={input: dataset['train']['data'][
+                                             index * batch_size:(index + 1) * batch_size], target: dataset['train']['data'][index * batch_size:(index + 1) * batch_size]},
                                          on_unused_input='ignore')  # ignore for when dropout is absent
 
     def shuffle(self, shuffling_type):

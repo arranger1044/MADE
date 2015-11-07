@@ -1,6 +1,7 @@
 #!/usr/bin/python -u
 
 from __future__ import division
+from __future__ import print_function
 import sys
 import os
 import time as t
@@ -74,12 +75,12 @@ def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, 
     for i in range(trainer_status["nb_shuffles"]):
         model.shuffle(shuffling_type)
 
-    print '\n### Training MADE ###'
+    print('\n### Training MADE ###')
     while(trainer_status["epoch"] < max_epochs and trainer_status["nb_of_epocs_without_improvement"] < look_ahead):
         trainer_status["epoch"] += 1
 
-        print 'Epoch {0} (Batch Size {1})'.format(trainer_status["epoch"], batch_size)
-        print '\tTraining   ...',
+        print('Epoch {0} (Batch Size {1})'.format(trainer_status["epoch"], batch_size))
+        print('\tTraining   ...', end=' ')
         start_time = t.time()
         nb_iterations = int(np.ceil(dataset['train']['length'] / batch_size))
         train_err = 0
@@ -94,16 +95,18 @@ def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, 
                     model.shuffle(shuffling_type)
                     trainer_status["nb_shuffles"] += 1
 
-        print utils.get_done_text(start_time), " avg NLL: {0:.6f}".format(train_err / nb_iterations)
+        print(utils.get_done_text(start_time),
+              " avg NLL: {0:.6f}".format(train_err / nb_iterations))
 
-        print '\tValidating ...',
+        print('\tValidating ...', end=' ')
         start_time = t.time()
         if shuffle_mask > 0:
             model.reset(shuffling_type)
-        valid_err, valid_err_std = get_mean_error_and_std(model, model.valid_log_prob, dataset['valid']['length'], shuffle_mask, shuffling_type, nb_shuffle_per_valid)
+        valid_err, valid_err_std = get_mean_error_and_std(model, model.valid_log_prob, dataset['valid'][
+                                                          'length'], shuffle_mask, shuffling_type, nb_shuffle_per_valid)
         if shuffle_mask > 0:
             model.reset(shuffling_type, trainer_status["nb_shuffles"])
-        print utils.get_done_text(start_time), " NLL: {0:.6f}".format(valid_err)
+        print(utils.get_done_text(start_time), " NLL: {0:.6f}".format(valid_err))
 
         if valid_err < trainer_status["best_valid_error"]:
             trainer_status["best_valid_error"] = valid_err
@@ -112,17 +115,18 @@ def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, 
             # Save best model
             if save_model_path is not None:
                 save_model_params(model, save_model_path)
-                utils.save_dict_to_json_file(os.path.join(save_model_path, "trainer_status"), trainer_status)
+                utils.save_dict_to_json_file(
+                    os.path.join(save_model_path, "trainer_status"), trainer_status)
         else:
             trainer_status["nb_of_epocs_without_improvement"] += 1
 
-    print "### Training", utils.get_done_text(start_training_time), "###"
+    print("### Training", utils.get_done_text(start_training_time), "###")
     total_train_time = t.time() - start_training_time
     return trainer_status["best_epoch"], total_train_time
 
 
 def build_model(dataset, trainingparams, hyperparams, hidden_sizes):
-    print '\n### Initializing MADE ... ',
+    print('\n### Initializing MADE ... ', end=' ')
     start_time = t.time()
     model = MADE(dataset,
                  learning_rate=trainingparams['learning_rate'],
@@ -138,31 +142,35 @@ def build_model(dataset, trainingparams, hyperparams, hidden_sizes):
                  dropout_rate=trainingparams['dropout_rate'],
                  weights_initialization=hyperparams['weights_initialization'],
                  mask_distribution=hyperparams['mask_distribution'])
-    print utils.get_done_text(start_time), "###"
+    print(utils.get_done_text(start_time), "###")
     return model
 
 
 def build_model_layer_pretraining(dataset, trainingparams, hyperparams, max_epochs):
 
-    print '\n#### Pretraining layer {} ####'.format(1),
+    print('\n#### Pretraining layer {} ####'.format(1), end=' ')
     model = build_model(dataset, trainingparams, hyperparams, hyperparams['hidden_sizes'][:1])
-    best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams['shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
+    best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams[
+                                                           'shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
 
     for i in range(2, len(hyperparams['hidden_sizes']) + 1):
-        print '\n#### Pretraining layer {} ####'.format(i),
+        print('\n#### Pretraining layer {} ####'.format(i), end=' ')
         model = build_model(dataset, trainingparams, hyperparams, hyperparams['hidden_sizes'][:i])
 
         # Set pre-trained layers
         for j in range(i - 1):
             for paramIdx in range(len(best_model.layers[j].params)):
-                model.layers[j].params[paramIdx].set_value(best_model.layers[j].params[paramIdx].get_value())
+                model.layers[j].params[paramIdx].set_value(
+                    best_model.layers[j].params[paramIdx].get_value())
 
         # Set pre-trained output
         for paramIdx in range(len(best_model.layers[-1].params)):
             if best_model.layers[-1].params[paramIdx] != best_model.layers[-1].W:
-                model.layers[-1].params[paramIdx].set_value(best_model.layers[-1].params[paramIdx].get_value())
+                model.layers[-
+                             1].params[paramIdx].set_value(best_model.layers[-1].params[paramIdx].get_value())
 
-        best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams['shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
+        best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams[
+                                                               'shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
 
     return best_model
 
@@ -186,31 +194,53 @@ def parse_args(args):
 
     group_trainer = parser.add_argument_group('train')
     group_trainer.add_argument('dataset_name', action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('learning_rate', type=float, action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('decrease_constant', type=float, action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('max_epochs', type=lambda x: np.inf if x == "-1" else int(x), help="If -1 will run until convergence.", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('shuffle_mask', type=int, help="0=None, -1=No cycles.", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('shuffling_type', metavar='shuffling_type', choices=['Once', 'Full', 'Ordering', 'Connectivity'], help="Choosing how the masks will be shuffled: {%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('nb_shuffle_per_valid', type=int, help="Only considered if shuffle_mask at -1.", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('batch_size', type=int, help="-1 will set to full batch.", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('look_ahead', type=int, help="Number of consecutive epochs without improvements before training stops.", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('pre_training', metavar='pre_training', type=eval, choices=[False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('pre_training_max_epoc', type=int, action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('update_rule', metavar='update_rule', choices=['None', 'adadelta', 'adagrad', 'rmsprop', 'adam', 'adam_paper'], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_trainer.add_argument('dropout_rate', type=float, help="%% of hidden neuron dropped with dropout.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'learning_rate', type=float, action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'decrease_constant', type=float, action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument('max_epochs', type=lambda x: np.inf if x == "-1" else int(
+        x), help="If -1 will run until convergence.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'shuffle_mask', type=int, help="0=None, -1=No cycles.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument('shuffling_type', metavar='shuffling_type', choices=[
+                               'Once', 'Full', 'Ordering', 'Connectivity'], help="Choosing how the masks will be shuffled: {%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument('nb_shuffle_per_valid', type=int,
+                               help="Only considered if shuffle_mask at -1.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'batch_size', type=int, help="-1 will set to full batch.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'look_ahead', type=int, help="Number of consecutive epochs without improvements before training stops.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument('pre_training', metavar='pre_training', type=eval, choices=[
+                               False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'pre_training_max_epoc', type=int, action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument('update_rule', metavar='update_rule', choices=[
+                               'None', 'adadelta', 'adagrad', 'rmsprop', 'adam', 'adam_paper'], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_trainer.add_argument(
+        'dropout_rate', type=float, help="%% of hidden neuron dropped with dropout.", action=GroupedAction, default=argparse.SUPPRESS)
 
     group_model = parser.add_argument_group('model')
-    group_model.add_argument('hidden_sizes', type=eval, help="ex: [500,200]", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('random_seed', type=int, action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('use_cond_mask', metavar='use_cond_mask', type=eval, choices=[False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('direct_input_connect', metavar='direct_input_connect', choices=["None", "Output", "Full"], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('direct_output_connect', metavar='direct_output_connect', type=eval, choices=[False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('hidden_activation', metavar='hidden_activation', choices=activation_functions.keys(), help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('weights_initialization', metavar='weights_initialization', choices=filter(lambda x: not x.startswith('_'), WeightsInitializer.__dict__), help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
-    group_model.add_argument('mask_distribution', type=float, help="Gives some control over which input will have more connections. Ex: -1 will give more importance to the firsts inputs, 1 to the lasts and 0 uniform.", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument(
+        'hidden_sizes', type=eval, help="ex: [500,200]", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument(
+        'random_seed', type=int, action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('use_cond_mask', metavar='use_cond_mask', type=eval, choices=[
+                             False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('direct_input_connect', metavar='direct_input_connect', choices=[
+                             "None", "Output", "Full"], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('direct_output_connect', metavar='direct_output_connect', type=eval, choices=[
+                             False, True], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('hidden_activation', metavar='hidden_activation', choices=list(
+        activation_functions.keys()), help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('weights_initialization', metavar='weights_initialization', choices=[
+                             x for x in WeightsInitializer.__dict__ if not x.startswith('_')], help="{%(choices)s}", action=GroupedAction, default=argparse.SUPPRESS)
+    group_model.add_argument('mask_distribution', type=float,
+                             help="Gives some control over which input will have more connections. Ex: -1 will give more importance to the firsts inputs, 1 to the lasts and 0 uniform.", action=GroupedAction, default=argparse.SUPPRESS)
 
-    parser.add_argument("--force", required=False, action='store_true', help="Override instead of resuming training of pre-existing model with same arguments.")
-    parser.add_argument("--name", required=False, help="Set the name of the experiment instead of hashing it from the arguments.")
+    parser.add_argument("--force", required=False, action='store_true',
+                        help="Override instead of resuming training of pre-existing model with same arguments.")
+    parser.add_argument("--name", required=False,
+                        help="Set the name of the experiment instead of hashing it from the arguments.")
 
     args = parser.parse_args()
 
@@ -218,7 +248,8 @@ def parse_args(args):
 
 
 def save_model_params(model, model_path):
-    np.savez_compressed(os.path.join(model_path, "params"), model.parameters, model.update_rule.parameters)
+    np.savez_compressed(
+        os.path.join(model_path, "params"), model.parameters, model.update_rule.parameters)
 
 
 def load_model_params(model, model_path):
@@ -248,30 +279,37 @@ if __name__ == '__main__':
     trainingparams = vars(args.train)
 
     #
-    # Set the name of the experiment (remove the --force from the args to make sure it will generate the same uid)
+    # Set the name of the experiment (remove the --force from the args to make
+    # sure it will generate the same uid)
     if '--force' in sys.argv:
         sys.argv.remove('--force')
-    experiment_name = args.name if args.name is not None else utils.generate_uid_from_string(' '.join(sys.argv))
+    experiment_name = args.name if args.name is not None else utils.generate_uid_from_string(
+        ' '.join(sys.argv))
 
     #
     # Creating the experiments folder or resuming experiment
     save_path_experiment = os.path.join('./experiments/', experiment_name)
     if os.path.isdir(save_path_experiment):
         if not args.force:
-            print "### Resuming experiment ({0}). ###\n".format(experiment_name)
-            loaded_hyperparams = utils.load_dict_from_json_file(os.path.join(save_path_experiment, "hyperparams"))
-            loaded_trainingparams = utils.load_dict_from_json_file(os.path.join(save_path_experiment, "trainingparams"))
+            print("### Resuming experiment ({0}). ###\n".format(experiment_name))
+            loaded_hyperparams = utils.load_dict_from_json_file(
+                os.path.join(save_path_experiment, "hyperparams"))
+            loaded_trainingparams = utils.load_dict_from_json_file(
+                os.path.join(save_path_experiment, "trainingparams"))
 
             if loaded_trainingparams != trainingparams or loaded_hyperparams != hyperparams:
-                print "The arguments provided are different than the one saved. Use --force if you are certain.\nQuitting."
+                print(
+                    "The arguments provided are different than the one saved. Use --force if you are certain.\nQuitting.")
                 exit()
 
             resume_mode = True
 
     else:
         os.makedirs(save_path_experiment)
-        utils.save_dict_to_json_file(os.path.join(save_path_experiment, "hyperparams"), hyperparams)
-        utils.save_dict_to_json_file(os.path.join(save_path_experiment, "trainingparams"), trainingparams)
+        utils.save_dict_to_json_file(
+            os.path.join(save_path_experiment, "hyperparams"), hyperparams)
+        utils.save_dict_to_json_file(
+            os.path.join(save_path_experiment, "trainingparams"), trainingparams)
 
     #
     # LOAD DATASET ####
@@ -282,7 +320,8 @@ if __name__ == '__main__':
     #
     # INITIALIZING LEARNER ####
     if trainingparams['pre_training']:
-        model = build_model_layer_pretraining(dataset, trainingparams, hyperparams, trainingparams['pre_training_max_epoc'])
+        model = build_model_layer_pretraining(
+            dataset, trainingparams, hyperparams, trainingparams['pre_training_max_epoc'])
     else:
         model = build_model(dataset, trainingparams, hyperparams, hyperparams['hidden_sizes'])
 
@@ -291,11 +330,13 @@ if __name__ == '__main__':
     # Not totally resumable if it was stopped during pre-training.
     if resume_mode:
         load_model_params(model, save_path_experiment)
-        trainer_status = utils.load_dict_from_json_file(os.path.join(save_path_experiment, "trainer_status"))
+        trainer_status = utils.load_dict_from_json_file(
+            os.path.join(save_path_experiment, "trainer_status"))
 
     #
     # TRAINING LEARNER ####
-    best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams['shuffle_mask'], trainingparams['nb_shuffle_per_valid'], trainingparams['max_epochs'], trainingparams['batch_size'], trainingparams['shuffling_type'], save_path_experiment, trainer_status)
+    best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams['shuffle_mask'], trainingparams[
+                                               'nb_shuffle_per_valid'], trainingparams['max_epochs'], trainingparams['batch_size'], trainingparams['shuffling_type'], save_path_experiment, trainer_status)
 
     #
     # Loading best model
@@ -304,17 +345,21 @@ if __name__ == '__main__':
     #
     # EVALUATING BEST MODEL ####
     model_evaluation = {}
-    print '\n### Evaluating best model from Epoch {0} ###'.format(best_epoch)
+    print('\n### Evaluating best model from Epoch {0} ###'.format(best_epoch))
     for log_prob_func_name in ['test', 'valid', 'train']:
         if trainingparams['shuffle_mask'] > 0:
             model.reset(trainingparams['shuffling_type'])
         if log_prob_func_name == "train":
-            model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model, model.train_log_prob_batch, dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
+            model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model, model.train_log_prob_batch, dataset[
+                                                                                log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
         else:
-            model_evaluation[log_prob_func_name] = get_mean_error_and_std(model, model.__dict__['{}_log_prob'.format(log_prob_func_name)], dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
-        print "\tBest {1} error is : {0:.6f}".format(model_evaluation[log_prob_func_name][0], log_prob_func_name.upper())
+            model_evaluation[log_prob_func_name] = get_mean_error_and_std(model, model.__dict__['{}_log_prob'.format(
+                log_prob_func_name)], dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
+        print("\tBest {1} error is : {0:.6f}".format(
+            model_evaluation[log_prob_func_name][0], log_prob_func_name.upper()))
 
     #
     # WRITING RESULTS #####
-    model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams['direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
+    model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams[
+        'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
     utils.write_result(dataset_name, model_info, experiment_name)

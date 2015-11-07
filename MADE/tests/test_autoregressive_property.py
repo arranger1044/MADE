@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import unittest
 from numpy.testing import assert_array_equal, assert_almost_equal
 
@@ -46,14 +48,16 @@ class AutoregressivePropertyTests(unittest.TestCase):
         theano.config.floatX = self._old_theano_config_floatX
 
     def test_total_prob(self):
-        print "Testing on model: input_size={0} hidden_sizes={1}{2}{3}{4} ".format(self.input_size, self.hidden_sizes, " CondMask" if self.use_cond_mask else "", " DirectInputConnect" + self.direct_input_connect if self.direct_input_connect != "None" else "", " DirectOutputConnect" if self.direct_output_connect else ""),
+        print("Testing on model: input_size={0} hidden_sizes={1}{2}{3}{4} ".format(self.input_size, self.hidden_sizes, " CondMask" if self.use_cond_mask else "",
+                                                                                   " DirectInputConnect" + self.direct_input_connect if self.direct_input_connect != "None" else "", " DirectOutputConnect" if self.direct_output_connect else ""), end=' ')
 
         # Test the model on all the data
         ps = []
         for i in range(self.nb_test):
-            ps += np.exp(self.model.valid_log_prob(False), dtype=theano.config.floatX).sum(dtype=theano.config.floatX),
+            ps += np.exp(self.model.valid_log_prob(False),
+                         dtype=theano.config.floatX).sum(dtype=theano.config.floatX),
             self.model.shuffle(self._shuffling_type)
-            print ".",
+            print(".", end=' ')
         assert_almost_equal(ps, 1)
 
     def test_verify_masks(self):
@@ -66,7 +70,8 @@ class AutoregressivePropertyTests(unittest.TestCase):
 
         # Make sure that the input do not "see" itself
         for perm in range(nb_perm_mask):
-            base = self.model.use(np.zeros((1, self.input_size), dtype=theano.config.floatX), False)
+            base = self.model.use(
+                np.zeros((1, self.input_size), dtype=theano.config.floatX), False)
 
             for i in range(self.input_size):
                 inp = np.zeros((1, self.input_size), dtype=theano.config.floatX)

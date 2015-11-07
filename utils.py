@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import time as t
 import pickle
@@ -18,7 +20,8 @@ if platform.system() != "Windows":
         try:
             fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
-            logging.info("Can't immediately write-lock the file ({0}), blocking ...".format(f.name))
+            logging.info(
+                "Can't immediately write-lock the file ({0}), blocking ...".format(f.name))
             fcntl.lockf(f, fcntl.LOCK_EX)
         yield f
         fcntl.lockf(f, fcntl.LOCK_UN)
@@ -34,7 +37,7 @@ else:
 
 def generate_uid_from_string(value):
     """ Create unique identifier from a string. """
-    return hashlib.sha256(value).hexdigest()
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
 def saveFeatures(model):
@@ -43,18 +46,19 @@ def saveFeatures(model):
 
 
 def write_result(dataset_name, model_info, experiment_name):
-    header = ["Learning Rate", "Decrease Constant", "Hidden Layers", "Random Seed", "Activation Function", "Max Epoch", "Best Epoch", "Look Ahead", "Batch Size", "Shuffle Mask", "Shuffling Type", "Nb Shuffle Per Valid", "Conditioning Mask", "Direct Input Connect", "Direct Output Connect", "Pre-Training", "Pre-Training Max Epoch", "Update Rule", "Dropout Rate", "Weights Initialization", "Mask Distribution knob", "Training err", "Training err std", "Validation err", "Validation err std", "Test err", "Test err std", "Total Training Time", "Experiment Name"]
+    header = ["Learning Rate", "Decrease Constant", "Hidden Layers", "Random Seed", "Activation Function", "Max Epoch", "Best Epoch", "Look Ahead", "Batch Size", "Shuffle Mask", "Shuffling Type", "Nb Shuffle Per Valid", "Conditioning Mask", "Direct Input Connect", "Direct Output Connect",
+              "Pre-Training", "Pre-Training Max Epoch", "Update Rule", "Dropout Rate", "Weights Initialization", "Mask Distribution knob", "Training err", "Training err std", "Validation err", "Validation err std", "Test err", "Test err std", "Total Training Time", "Experiment Name"]
 
-    result = map(str, model_info[0:21])
-    result += map("{0:.6f}".format, model_info[21:-1])
+    result = list(map(str, model_info[0:21]))
+    result += list(map("{0:.6f}".format, model_info[21:-1]))
     result += ["{0:.4f}".format(model_info[-1])]
     result += [experiment_name]
 
-    print "### Saving result to file ...",
+    print("### Saving result to file ...", end=' ')
     start_time = t.time()
     write_result_file(dataset_name, header, result)
 
-    print get_done_text(start_time)
+    print(get_done_text(start_time))
 
 
 def write_result_file(dataset_name, header, result):
@@ -85,14 +89,15 @@ def load_dict_from_json_file(path):
 
 def printParams(model):
     for l in model.layers:
-        print "\t#",
+        print("\t#", end=' ')
         for p in l.params:
-            print p,
-        print
+            print(p, end=' ')
+        print()
 
 
 def print_computational_graphs(model, hidden_sizes, shuffle_mask, use_cond_mask, direct_input_connect):
-    file_name = "MADE_h{}.shuffle{}.cond_mask{}.direct_conn{}_{}_".format(hidden_sizes, shuffle_mask, use_cond_mask, direct_input_connect, theano.config.device)
+    file_name = "MADE_h{}.shuffle{}.cond_mask{}.direct_conn{}_{}_".format(
+        hidden_sizes, shuffle_mask, use_cond_mask, direct_input_connect, theano.config.device)
     theano.printing.pydotprint(model.use, file_name + "use")
     theano.printing.pydotprint(model.learn, file_name + "learn")
     theano.printing.pydotprint(model.shuffle, file_name + "shuffle")
