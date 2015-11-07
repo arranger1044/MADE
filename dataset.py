@@ -56,7 +56,25 @@ class Dataset(object):
                     'nips',
                     'ocr_letters',
                     'rcv1',
-                    'web']
+                    'web',
+                    'accidents',
+                    'ad',
+                    'baudio',
+                    'bbc',
+                    'bnetflix',
+                    'book',
+                    'c20ng',
+                    'cr52',
+                    'cwebkb',
+                    'jester',
+                    'kdd',
+                    'msnbc',
+                    'msweb',
+                    'nltcs',
+                    'plants',
+                    'pumsb_star',
+                    'tmovie',
+                    'tretail']
 
         if dataset_name not in datasets:
             raise ValueError('Dataset unknown: ' + dataset_name)
