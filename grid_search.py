@@ -138,7 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--update_rule', nargs='+', default=UPDATE_RULE)
     parser.add_argument('--dropout_rate', type=float, nargs='+', default=DROPOUT_RATE)
 
-    parser.add_argument('--hidden_sizes', type=eval, nargs='+', default=HIDDEN_SIZES)
+    parser.add_argument('--hidden_sizes', type=str, nargs='+', default=HIDDEN_SIZES)
     parser.add_argument('--random_seed', type=int,  nargs='+', default=RANDOM_SEED)
     parser.add_argument('--use_cond_mask',  type=eval, choices=[False, True], nargs='+',
                         default=USE_COND_MASK)
