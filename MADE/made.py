@@ -181,6 +181,16 @@ class MADE(object):
                                              index * batch_size:(index + 1) * batch_size], target: dataset['train']['data'][index * batch_size:(index + 1) * batch_size]},
                                          on_unused_input='ignore')  # ignore for when dropout is absent
 
+        #
+        # adding functions to extract embeddings from each layer
+        self.embedding_funcs = [theano.function(name='embedding-{}'.format(i),
+                                                inputs=[input, is_train],
+                                                outputs=layer.output,
+                                                # givens={input: dataset['train']['data'][
+                                                # index * batch_size:(index + 1) * batch_size]},
+                                                on_unused_input='ignore')
+                                for i, layer in enumerate(self.layers[:-1])]
+
     def shuffle(self, shuffling_type):
         if shuffling_type == "Once" and self.shuffled_once is False:
             self.mask_generator.shuffle_ordering()
@@ -222,3 +232,11 @@ class MADE(object):
             samples[:, inv_swap] = rng.binomial(p=out[:, inv_swap], n=1)
 
         return samples
+
+    def embeddings(self, input, layer_id):
+        """
+        Return the embedding representation of input as the activations
+        of the neurons in layer specified by layer_id
+        """
+        emb = self.embedding_funcs[layer_id](input, False)
+        return emb

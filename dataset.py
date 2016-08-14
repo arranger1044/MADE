@@ -54,7 +54,7 @@ class Dataset(object):
                     'dna',
                     'mushrooms',
                     'nips',
-                    'ocr_letters',
+                    'ocr_letters-orig',
                     'rcv1',
                     'web',
                     'accidents',
@@ -74,7 +74,12 @@ class Dataset(object):
                     'plants',
                     'pumsb_star',
                     'tmovie',
-                    'tretail']
+                    'tretail',
+                    'rectangles',
+                    'convex',
+                    'ocr_letters',
+                    'caltech101',
+                    'bmnist']
 
         if dataset_name not in datasets:
             raise ValueError('Dataset unknown: ' + dataset_name)

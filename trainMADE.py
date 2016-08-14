@@ -5,6 +5,12 @@ from __future__ import print_function
 import sys
 import os
 import time as t
+try:
+    from time import perf_counter
+except:
+    from time import time
+    perf_counter = time
+
 import numpy as np
 import theano
 import theano.sandbox.softsign
@@ -13,6 +19,9 @@ from MADE.weights_initializer import WeightsInitializer
 from MADE.made import MADE
 from dataset import Dataset
 import utils
+
+import pickle
+import gzip
 
 
 def get_mean_error_and_std(model, error_fnc, set_size, shuffle_mask, shuffling_type, nb_shuffle=1):
@@ -175,6 +184,45 @@ def build_model_layer_pretraining(dataset, trainingparams, hyperparams, max_epoc
     return best_model
 
 
+def extract_embeddings(model,
+                       dataset,
+                       n_instances,
+                       batch_size=100,
+                       layer_ids=[0, 1, 2],
+                       dtype=float):
+
+    embedding_sizes = [layer.n_out for layer in model.layers[:-1]]
+    print('n layers {}'.format(len(model.layers)))
+    embedding_size = sum(embedding_sizes)
+    feature_indexes = [0]
+    for j, size in enumerate(embedding_sizes):
+        feature_indexes += [size + feature_indexes[j]]
+
+    print('\nTransforming data {} -> {} {}'.format(dataset.shape[1], embedding_size,
+                                                   feature_indexes))
+    repr_data = np.zeros((n_instances, embedding_size), dtype=dtype)
+    repr_data[:] = np.nan
+
+    nb_iterations = int(np.ceil(n_instances / batch_size))
+    emb_data_start_t = perf_counter()
+    for index in range(nb_iterations):
+        emb_start_t = perf_counter()
+        data_split = dataset[index * batch_size:(index + 1) * batch_size]
+        for j in layer_ids:
+            repr_data[index * batch_size:(index + 1) * batch_size,
+                      feature_indexes[j]:feature_indexes[j + 1]] = model.embeddings(data_split, j)
+        emb_end_t = perf_counter()
+        print('Processed batch {}/{} in {} secs'.format(index + 1,
+                                                        nb_iterations,
+                                                        emb_end_t - emb_start_t),
+              end='                \r')
+    emb_data_end_t = perf_counter()
+    print('All dataset processed in {} secs'.format(emb_data_end_t - emb_data_start_t))
+
+    assert not np.isnan(repr_data).any()
+    return repr_data, feature_indexes
+
+
 def parse_args(args):
     import argparse
 
@@ -241,6 +289,8 @@ def parse_args(args):
                         help="Override instead of resuming training of pre-existing model with same arguments.")
     parser.add_argument("--name", required=False,
                         help="Set the name of the experiment instead of hashing it from the arguments.")
+    parser.add_argument("--embeddings", required=False, type=str, default=None,
+                        help="Extract embeddings from layers")
 
     args = parser.parse_args()
 
@@ -346,20 +396,47 @@ if __name__ == '__main__':
     # EVALUATING BEST MODEL ####
     model_evaluation = {}
     print('\n### Evaluating best model from Epoch {0} ###'.format(best_epoch))
-    for log_prob_func_name in ['test', 'valid', 'train']:
-        if trainingparams['shuffle_mask'] > 0:
-            model.reset(trainingparams['shuffling_type'])
-        if log_prob_func_name == "train":
-            model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model, model.train_log_prob_batch, dataset[
-                                                                                log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
-        else:
-            model_evaluation[log_prob_func_name] = get_mean_error_and_std(model, model.__dict__['{}_log_prob'.format(
-                log_prob_func_name)], dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
-        print("\tBest {1} error is : {0:.6f}".format(
-            model_evaluation[log_prob_func_name][0], log_prob_func_name.upper()))
+    # for log_prob_func_name in ['test', 'valid', 'train']:
+    #     if trainingparams['shuffle_mask'] > 0:
+    #         model.reset(trainingparams['shuffling_type'])
+    #     if log_prob_func_name == "train":
+    #         model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model, model.train_log_prob_batch, dataset[
+    #                                                                             log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
+    #     else:
+    #         model_evaluation[log_prob_func_name] = get_mean_error_and_std(model, model.__dict__['{}_log_prob'.format(
+    #             log_prob_func_name)], dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
+    #     print("\tBest {1} error is : {0:.6f}".format(
+    #         model_evaluation[log_prob_func_name][0], log_prob_func_name.upper()))
+
+    # #
+    # # WRITING RESULTS #####
+    # model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams[
+    #     'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
+    # utils.write_result(dataset_name, model_info, experiment_name)
 
     #
-    # WRITING RESULTS #####
-    model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams[
-        'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
-    utils.write_result(dataset_name, model_info, experiment_name)
+    # extracting embeddings
+    if args.embeddings is not None:
+
+        layer_ids = [i for i in range(len(model.layers[:-1]))]
+        repr_save_path = os.path.join(args.embeddings, 'made.{}.{}.repr-data.pklz'.format(dataset_name,
+                                                                                          experiment_name))
+        repr_data = []
+
+        for dataset_split in ['train', 'valid', 'test']:
+
+            split = dataset[dataset_split]['data'].get_value()
+            print('\nProcessing split {} {}'.format(dataset_split,
+                                                    dataset[dataset_split]['length']))
+            repr_split, f = extract_embeddings(model,
+                                               split,
+                                               n_instances=dataset[dataset_split]['length'],
+                                               batch_size=100,
+                                               layer_ids=layer_ids,
+                                               dtype=float)
+            repr_data.append(repr_split)
+            #
+            # saving it
+        with gzip.open(repr_save_path, 'wb') as f:
+            print('Saving splits to {}'.format(repr_save_path))
+            pickle.dump(repr_data, f, protocol=4)
