@@ -13,7 +13,7 @@ except:
 
 import numpy as np
 import theano
-import theano.sandbox.softsign
+import theano.tensor.nnet.nnet
 from scipy.misc import logsumexp
 from MADE.weights_initializer import WeightsInitializer
 from MADE.made import MADE
@@ -315,7 +315,7 @@ activation_functions = {
     "hinge": lambda x: theano.tensor.maximum(x, 0.0),
     "softplus": theano.tensor.nnet.softplus,
     "tanh": theano.tensor.tanh,
-    "softsign": theano.sandbox.softsign.softsign
+    "softsign": theano.tensor.nnet.nnet.softsign
 }
 
 if __name__ == '__main__':
@@ -396,23 +396,38 @@ if __name__ == '__main__':
     # EVALUATING BEST MODEL ####
     model_evaluation = {}
     print('\n### Evaluating best model from Epoch {0} ###'.format(best_epoch))
-    # for log_prob_func_name in ['test', 'valid', 'train']:
-    #     if trainingparams['shuffle_mask'] > 0:
-    #         model.reset(trainingparams['shuffling_type'])
-    #     if log_prob_func_name == "train":
-    #         model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model, model.train_log_prob_batch, dataset[
-    #                                                                             log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
-    #     else:
-    #         model_evaluation[log_prob_func_name] = get_mean_error_and_std(model, model.__dict__['{}_log_prob'.format(
-    #             log_prob_func_name)], dataset[log_prob_func_name]['length'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], 1000)
-    #     print("\tBest {1} error is : {0:.6f}".format(
-    #         model_evaluation[log_prob_func_name][0], log_prob_func_name.upper()))
+    for log_prob_func_name in ['test', 'valid', 'train']:
+        if trainingparams['shuffle_mask'] > 0:
+            model.reset(trainingparams['shuffling_type'])
+        if log_prob_func_name == "train":
+            model_evaluation[log_prob_func_name] = get_mean_error_and_std_final(model,
+                                                                                model.train_log_prob_batch,
+                                                                                dataset[log_prob_func_name][
+                                                                                    'length'],
+                                                                                trainingparams[
+                                                                                    'shuffle_mask'],
+                                                                                trainingparams[
+                                                                                    'shuffling_type'],
+                                                                                1000)
+        else:
+            model_evaluation[log_prob_func_name] = get_mean_error_and_std(model,
+                                                                          model.__dict__['{}_log_prob'.format(
+                                                                              log_prob_func_name)],
+                                                                          dataset[log_prob_func_name][
+                                                                              'length'],
+                                                                          trainingparams[
+                                                                              'shuffle_mask'],
+                                                                          trainingparams[
+                                                                              'shuffling_type'],
+                                                                          1000)
+        print("\tBest {1} error is : {0:.6f}".format(
+            model_evaluation[log_prob_func_name][0], log_prob_func_name.upper()))
 
-    # #
-    # # WRITING RESULTS #####
-    # model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams[
-    #     'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
-    # utils.write_result(dataset_name, model_info, experiment_name)
+    #
+    # WRITING RESULTS #####
+    model_info = [trainingparams['learning_rate'], trainingparams['decrease_constant'], hyperparams['hidden_sizes'], hyperparams['random_seed'], hyperparams['hidden_activation'], trainingparams['max_epochs'], best_epoch, trainingparams['look_ahead'], trainingparams['batch_size'], trainingparams['shuffle_mask'], trainingparams['shuffling_type'], trainingparams['nb_shuffle_per_valid'], hyperparams['use_cond_mask'], hyperparams['direct_input_connect'], hyperparams[
+        'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
+    utils.write_result(dataset_name, model_info, experiment_name)
 
     #
     # extracting embeddings
