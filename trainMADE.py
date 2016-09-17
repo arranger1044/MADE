@@ -300,7 +300,7 @@ def parse_args(args):
                         help="Set the name of the experiment instead of hashing it from the arguments.")
     parser.add_argument("--embeddings", required=False, type=str, default=None,
                         help="Extract embeddings from layers")
-    parser.add_argument("--last_layer_embeddings", required=False, action='store_true',
+    parser.add_argument("--last-layer-embeddings", required=False, action='store_true',
                         help="Extract embeddings from last layer only")
 
     args = parser.parse_args()
