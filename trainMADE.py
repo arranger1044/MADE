@@ -211,12 +211,12 @@ def extract_embeddings(model,
         emb_start_t = perf_counter()
         data_split = dataset[index * batch_size:(index + 1) * batch_size]
         for j in range(len(layer_ids)):
-            print('\t\tchecking j {} feature_indexes {}:{} layer_ids {}}'.format(j,
-                                                                                 feature_indexes[
-                                                                                     j],
-                                                                                 feature_indexes[
-                                                                                     j + 1],
-                                                                                 layer_ids[j]))
+            print('\t\tchecking j {} feature_indexes {}:{} layer_ids {}'.format(j,
+                                                                                feature_indexes[
+                                                                                    j],
+                                                                                feature_indexes[
+                                                                                    j + 1],
+                                                                                layer_ids[j]))
             repr_data[index * batch_size:(index + 1) * batch_size,
                       feature_indexes[j]:feature_indexes[j + 1]] = model.embeddings(data_split,
                                                                                     layer_ids[j])
