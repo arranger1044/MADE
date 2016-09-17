@@ -454,8 +454,8 @@ if __name__ == '__main__':
 
         print('Considering only layers {} for embeddings'.format(layer_ids))
 
-        repr_save_path = os.path.join(args.embeddings, 'made.{}.{}.repr-data.pklz'.format(dataset_name,
-                                                                                          experiment_name))
+        repr_save_path = os.path.join(args.embeddings,
+                                      'made.{}.repr-data.pklz'.format(experiment_name))
         repr_data = []
 
         for dataset_split in ['train', 'valid', 'test']:
