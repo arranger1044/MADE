@@ -191,15 +191,17 @@ def extract_embeddings(model,
                        layer_ids=[0, 1, 2],
                        dtype=float):
 
-    embedding_sizes = [layer.n_out for layer in model.layers[:-1]]
-    print('n layers {}'.format(len(model.layers)))
+    # embedding_sizes = [layer.n_out for layer in model.layers[:-1]]
+    embedding_sizes = [model.layers[j].n_out for j in layer_ids]
     embedding_size = sum(embedding_sizes)
     feature_indexes = [0]
     for j, size in enumerate(embedding_sizes):
         feature_indexes += [size + feature_indexes[j]]
 
-    print('\nTransforming data {} -> {} {}'.format(dataset.shape[1], embedding_size,
-                                                   feature_indexes))
+    print('\nTransforming data {} -> {} {}\n\t(layer embedding sizes {} )'.format(dataset.shape[1],
+                                                                                  embedding_size,
+                                                                                  feature_indexes,
+                                                                                  embedding_sizes))
     repr_data = np.zeros((n_instances, embedding_size), dtype=dtype)
     repr_data[:] = np.nan
 
@@ -208,9 +210,16 @@ def extract_embeddings(model,
     for index in range(nb_iterations):
         emb_start_t = perf_counter()
         data_split = dataset[index * batch_size:(index + 1) * batch_size]
-        for j in layer_ids:
+        for j in range(len(layer_ids)):
+            print('\t\tchecking j {} feature_indexes {}:{} layer_ids {}}'.format(j,
+                                                                                 feature_indexes[
+                                                                                     j],
+                                                                                 feature_indexes[
+                                                                                     j + 1],
+                                                                                 layer_ids[j]))
             repr_data[index * batch_size:(index + 1) * batch_size,
-                      feature_indexes[j]:feature_indexes[j + 1]] = model.embeddings(data_split, j)
+                      feature_indexes[j]:feature_indexes[j + 1]] = model.embeddings(data_split,
+                                                                                    layer_ids[j])
         emb_end_t = perf_counter()
         print('Processed batch {}/{} in {} secs'.format(index + 1,
                                                         nb_iterations,
@@ -291,6 +300,8 @@ def parse_args(args):
                         help="Set the name of the experiment instead of hashing it from the arguments.")
     parser.add_argument("--embeddings", required=False, type=str, default=None,
                         help="Extract embeddings from layers")
+    parser.add_argument("--last_layer_embeddings", required=False, action='store_true',
+                        help="Extract embeddings from last layer only")
 
     args = parser.parse_args()
 
@@ -433,7 +444,16 @@ if __name__ == '__main__':
     # extracting embeddings
     if args.embeddings is not None:
 
-        layer_ids = [i for i in range(len(model.layers[:-1]))]
+        #
+        # take them all?
+        layer_ids = None
+        if args.last_layer_embeddings:
+            layer_ids = [len(model.layers[:-1]) - 1]
+        else:
+            layer_ids = [i for i in range(len(model.layers[:-1]))]
+
+        print('Considering only layers {} for embeddings'.format(layer_ids))
+
         repr_save_path = os.path.join(args.embeddings, 'made.{}.{}.repr-data.pklz'.format(dataset_name,
                                                                                           experiment_name))
         repr_data = []
