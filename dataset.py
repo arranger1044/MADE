@@ -81,8 +81,9 @@ class Dataset(object):
                     'caltech101',
                     'bmnist']
 
-        if dataset_name not in datasets:
-            raise ValueError('Dataset unknown: ' + dataset_name)
+        # FIXME: disabling for a while
+        # if dataset_name not in datasets:
+        #     raise ValueError('Dataset unknown: ' + dataset_name)
 
         print('### Loading dataset [{0}] ...'.format(dataset_name), end=' ')
         start_time = t.time()
