@@ -12,6 +12,7 @@ except:
     perf_counter = time
 
 import numpy as np
+from numpy.testing import assert_array_almost_equal
 import theano
 import theano.tensor.nnet.nnet
 from scipy.misc import logsumexp
@@ -302,6 +303,8 @@ def parse_args(args):
                         help="Extract embeddings from layers")
     parser.add_argument("--last-layer-embeddings", required=False, action='store_true',
                         help="Extract embeddings from last layer only")
+    parser.add_argument("--save-model", required=False, type=str, default=None,
+                        help="Dir to save the model as a pickle file")
 
     args = parser.parse_args()
 
@@ -323,7 +326,8 @@ def load_model_params(model, model_path):
 
 activation_functions = {
     "sigmoid": theano.tensor.nnet.sigmoid,
-    "hinge": lambda x: theano.tensor.maximum(x, 0.0),
+    # "hinge": lambda x: theano.tensor.maximum(x, 0.0),
+    "hinge": theano.tensor.nnet.relu,
     "softplus": theano.tensor.nnet.softplus,
     "tanh": theano.tensor.tanh,
     "softsign": theano.tensor.nnet.nnet.softsign
@@ -440,6 +444,14 @@ if __name__ == '__main__':
         'direct_output_connect'], trainingparams['pre_training'], trainingparams['pre_training_max_epoc'], trainingparams['update_rule'], trainingparams['dropout_rate'], hyperparams['weights_initialization'], hyperparams['mask_distribution'], float(model_evaluation['train'][0]), float(model_evaluation['train'][1]), float(model_evaluation['valid'][0]), float(model_evaluation['valid'][1]), float(model_evaluation['test'][0]), float(model_evaluation['test'][1]), total_train_time]
     utils.write_result(dataset_name, model_info, experiment_name)
 
+    if args.save_model:
+        model_save_path = os.path.join(args.save_model, 'made.{}.{}.model'.format(dataset_name,
+                                                                                  experiment_name))
+        os.makedirs(args.save_model, exist_ok=True)
+        model.to_pickle(model_save_path)
+
+        # model2 = MADE.from_pickle(model_save_path + '.pklz')
+
     #
     # extracting embeddings
     if args.embeddings is not None:
@@ -469,9 +481,58 @@ if __name__ == '__main__':
                                                batch_size=100,
                                                layer_ids=layer_ids,
                                                dtype=float)
+
+            # repr_split2, f2 = extract_embeddings(model2,
+            #                                      split,
+            #                                      n_instances=dataset[dataset_split]['length'],
+            #                                      batch_size=100,
+            #                                      layer_ids=layer_ids,
+            #                                      dtype=float)
+
+            # assert_array_almost_equal(repr_split, repr_split2)
+
             repr_data.append(repr_split)
             #
             # saving it
         with gzip.open(repr_save_path, 'wb') as f:
             print('Saving splits to {}'.format(repr_save_path))
             pickle.dump(repr_data, f, protocol=4)
+
+        # #
+        # # getting last layer
+        # lle = repr_data[0][:, -500:].astype(theano.config.floatX)
+        # threshold = 0.5
+        # p, inv_p, sp, inv_sp, pp, psp, ainv_p, ainv_sp, i_sp = model.predict(lle, threshold)
+
+        # # p2, inv_p2, sp2, inv_sp2, pp2, psp2, ainv_p2, ainv_sp2, i_sp2 = model2.predict(lle,
+        # #                                                                                threshold)
+
+        # # assert_array_almost_equal(p, p2)
+        # # assert_array_almost_equal(inv_p, inv_p2)
+        # # assert_array_almost_equal(sp, sp2)
+        # # assert_array_almost_equal(pp, pp2)
+        # # assert_array_almost_equal(ainv_p, ainv_p2)
+        # # assert_array_almost_equal(inv_sp, inv_sp2)
+        # # assert_array_almost_equal(i_sp, i_sp2)
+
+        # print(model.use(dataset['train']['data'].get_value()[:10], False)[:10])
+        # print('data')
+        # print(dataset['train']['data'].get_value()[:10].astype(int))
+        # print('p')
+        # print(p[:10])
+        # print('inv p')
+        # print(inv_p[:10])
+        # print('ainv p')
+        # print(ainv_p[:10])
+        # print('sp')
+        # print(sp[:10])
+        # print('inv sp')
+        # print(inv_sp[:10])
+        # print('ainv sp')
+        # print(ainv_sp[:10])
+        # print('pp')
+        # print(pp[:10])
+        # print('psp')
+        # print(psp[:10])
+        # print('iter sp')
+        # print(i_sp[:10])

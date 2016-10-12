@@ -3,12 +3,26 @@ from __future__ import absolute_import
 import numpy as np
 import theano
 import theano.tensor as T
+# import dill as pickle
+import pickle
+
+import gzip
 
 from .update_rules import DecreasingLearningRate, AdaGrad, AdaDelta, RMSProp, Adam, Adam_paper
 # , MaskGenerator
 from .layer_types import ConditionningMaskedLayer, dropoutLayerDecorator, DirectInputConnectConditionningMaskedLayer, DirectOutputInputConnectConditionningMaskedOutputLayer
 from .mask_generator import MaskGenerator
 from .weights_initializer import WeightsInitializer
+
+
+class SeedGenerator(object):
+    # This subclass purpose is to maximize randomness and still keep reproducibility
+
+    def __init__(self, random_seed):
+        self.rng = np.random.mtrand.RandomState(random_seed)
+
+    def get(self):
+        return self.rng.randint(42424242)
 
 
 class MADE(object):
@@ -31,14 +45,6 @@ class MADE(object):
         input_size = dataset['input_size']
         self.shuffled_once = False
 
-        class SeedGenerator(object):
-            # This subclass purpose is to maximize randomness and still keep reproducibility
-
-            def __init__(self, random_seed):
-                self.rng = np.random.mtrand.RandomState(random_seed)
-
-            def get(self):
-                return self.rng.randint(42424242)
         self.seed_generator = SeedGenerator(random_seed)
 
         self.trng = T.shared_randomstreams.RandomStreams(self.seed_generator.get())
@@ -191,6 +197,17 @@ class MADE(object):
                                                 on_unused_input='ignore')
                                 for i, layer in enumerate(self.layers[:-1])]
 
+        pred_threshold = T.scalar()
+        last_layer_embeddings = T.matrix(name="ll-embeddings")
+        pred_probs = output  # T.dot(last_layer_embeddings, self.layers[-1].W) + self.layers[-1].b
+        predictions = T.switch(pred_probs < pred_threshold, 0, 1)
+
+        self.predict_func = theano.function(name='predict',
+                                            inputs=[last_layer_embeddings, pred_threshold],
+                                            outputs=[output, predictions],
+                                            givens={self.layers[-1].input: last_layer_embeddings},
+                                            on_unused_input='ignore')
+
     def shuffle(self, shuffling_type):
         if shuffling_type == "Once" and self.shuffled_once is False:
             self.mask_generator.shuffle_ordering()
@@ -240,3 +257,92 @@ class MADE(object):
         """
         emb = self.embedding_funcs[layer_id](input, False)
         return emb
+
+    def to_pickle(self, file_path, compress=True):
+        """
+        Exporting the theano model to a (possibly compressed) pickle file
+        """
+
+        model_file = None
+        if compress:
+            file_path = file_path if file_path.endswith('.pklz') else '{}.pklz'.format(file_path)
+            model_file = gzip.open(file_path, 'wb')
+        else:
+            file_path = file_path if file_path.endswith('.pkl') else '{}.pkl'.format(file_path)
+            model_file = open(file_path, 'wb')
+
+        print('Saving MADE model to pickle file: {}'.format(file_path))
+
+        pickle.dump(self, model_file, protocol=4)
+        model_file.close()
+
+    @classmethod
+    def from_pickle(cls, file_path, compressed=True):
+        model_file = None
+        if compressed:
+            model_file = gzip.open(file_path, 'rb')
+        else:
+            model_file = open(file_path, 'rb')
+
+        return pickle.load(model_file)
+
+    # def predict(self, last_layer_embeddings, threshold):
+    #     """
+    #     Returning the predictions of the decoder (\hat(x))
+    #     given the last hidden layer embeddings
+    #     """
+
+    #     swap_order = self.mask_generator.ordering.get_value()
+
+    #     input_size = self.layers[0].W.shape[0].eval()
+
+    #     output_probs, preds = self.predict_func(last_layer_embeddings, threshold)
+
+    #     embs = np.zeros(last_layer_embeddings.shape, dtype=last_layer_embeddings.dtype)
+
+    #     print('output: {}'.format(output_probs))
+    #     print('preds: {}'.format(preds))
+
+    #     rng = np.random.mtrand.RandomState(self.seed_generator.get())
+
+    #     inv_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     iter_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     p_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     p_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     inv_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     inv_output_probs = np.zeros(output_probs.shape, dtype=output_probs.dtype)
+    #     ainv_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     ainv_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
+    #     ainv_output_probs = np.zeros(output_probs.shape, dtype=output_probs.dtype)
+    #     print(swap_order)
+
+    #     # for i in range(input_size):
+    #     #     inv_swap = np.where(swap_order == i)[0][0]
+    #     #     out = self.use(samples, False)
+    #     #     rng.binomial(p=out[:, inv_swap], n=1)
+    #     #     samples[:, inv_swap] = rng.binomial(p=out[:, inv_swap], n=1)
+
+    #     for i in range(input_size):
+    #         inv_swap = np.where(swap_order == i)[0][0]
+    #         o, p = self.predict_func(embs, threshold)
+    #         embs[:, inv_swap] = last_layer_embeddings[:, inv_swap]
+    #         iter_preds[:, inv_swap] = rng.binomial(p=o[:, inv_swap], n=1)
+
+    #         print('i {} inv {}'.format(i, inv_swap))
+    #         inv_preds[:, i] = preds[:, inv_swap]
+    #         inv_output_probs[:, i] = output_probs[:, inv_swap]
+    #         inv_sampled_preds[:, i] = rng.binomial(p=output_probs[:, inv_swap], n=1)
+    #         ainv_preds[:, inv_swap] = preds[:, i]
+    #         ainv_output_probs[:, inv_swap] = output_probs[:, i]
+    #         ainv_sampled_preds[:, inv_swap] = rng.binomial(p=output_probs[:, i], n=1)
+    #         sampled_preds[:, i] = rng.binomial(p=output_probs[:, i], n=1)
+    #         p_sampled_preds[:, inv_swap] = rng.binomial(p=output_probs[:, inv_swap], n=1)
+    #         p_preds[:, inv_swap] = preds[:, inv_swap]
+    #     print('inv output: {}'.format(inv_output_probs))
+    #     print('inv preds: {}'.format(inv_preds))
+    #     print('inv sampled preds: {}'.format(inv_sampled_preds))
+    #     print(inv_preds[:10])
+
+    # return preds, inv_preds, sampled_preds, inv_sampled_preds, p_preds,
+    # p_sampled_preds, ainv_preds, ainv_sampled_preds, iter_preds
