@@ -197,16 +197,38 @@ class MADE(object):
                                                 on_unused_input='ignore')
                                 for i, layer in enumerate(self.layers[:-1])]
 
-        pred_threshold = T.scalar()
-        last_layer_embeddings = T.matrix(name="ll-embeddings")
-        pred_probs = output  # T.dot(last_layer_embeddings, self.layers[-1].W) + self.layers[-1].b
-        predictions = T.switch(pred_probs < pred_threshold, 0, 1)
+        #
+        # NOTE: the predict method (for decoding) is possible only when there is no skip
+        # connections to the output layer
+        if direct_input_connect == 'None' and not direct_output_connect:
+            print('No skip connections! defining decoding function')
+            pred_threshold = T.vector()
+            last_layer_embeddings = T.matrix(name="ll-embeddings")
+            output_probs = T.matrix(name="output-probs")
+            # T.dot(last_layer_embeddings, self.layers[-1].W) + self.layers[-1].b
+            pred_probs = output
+            predictions = T.switch(pred_probs < pred_threshold, 0, 1)
+            thresholded_output = T.switch(output_probs < pred_threshold, 0, 1)
 
-        self.predict_func = theano.function(name='predict',
-                                            inputs=[last_layer_embeddings, pred_threshold],
-                                            outputs=[output, predictions],
-                                            givens={self.layers[-1].input: last_layer_embeddings},
-                                            on_unused_input='ignore')
+            self.predict_probs = theano.function(name='predict_probs',
+                                                 inputs=[last_layer_embeddings],
+                                                 outputs=pred_probs,
+                                                 givens={self.layers[-1].input:
+                                                         last_layer_embeddings},
+                                                 on_unused_input='ignore')
+            self.threshold_probs = theano.function(name='threshold_probs',
+                                                   inputs=[output_probs, pred_threshold],
+                                                   outputs=thresholded_output,
+                                                   on_unused_input='ignore')
+            self.predict_func = theano.function(name='predict',
+                                                inputs=[last_layer_embeddings, pred_threshold],
+                                                outputs=predictions,
+                                                givens={self.layers[-1].input:
+                                                        last_layer_embeddings},
+                                                on_unused_input='ignore')
+        else:
+            self.predict_func = None
+            print('Skip connections detected! decoding will fail!')
 
     def shuffle(self, shuffling_type):
         if shuffling_type == "Once" and self.shuffled_once is False:
@@ -286,63 +308,68 @@ class MADE(object):
 
         return pickle.load(model_file)
 
-    # def predict(self, last_layer_embeddings, threshold):
-    #     """
-    #     Returning the predictions of the decoder (\hat(x))
-    #     given the last hidden layer embeddings
-    #     """
+    def estimate_threshold_(self, probs, data, feature_wise=False):
+        """
+        Estimating an array of thresholds (label_wise or globally) for
+        setting predictions to 0 or 1, based on some train data
+        """
+        thresholds = None
+        n_features = data.shape[1]
+        n_samples = data.shape[0]
 
-    #     swap_order = self.mask_generator.ordering.get_value()
+        n_points = n_samples * n_features
 
-    #     input_size = self.layers[0].W.shape[0].eval()
+        if not feature_wise:
+            #
+            # flatten and sort probs
+            sorted_probs_array = np.sort(probs, axis=None)
+            #
+            # compute proportion of zeros in data
+            n_zeros = int(n_points - data.sum())
+            #
+            #
+            threshold = sorted_probs_array[n_zeros]
+            thresholds = np.array([threshold for i in range(n_features)])
+        else:
+            #
+            # sort column wise
+            sorted_probs_array = np.sort(probs, axis=0)
+            #
+            # compute proportion of zeros in data
+            n_zeros = (n_samples - data.sum(axis=0)).astype(int)
+            print(n_zeros.shape, n_zeros, data.sum(axis=0))
+            thresholds = sorted_probs_array[n_zeros, np.arange(n_features)]
 
-    #     output_probs, preds = self.predict_func(last_layer_embeddings, threshold)
+        assert thresholds.ndim == 1 and thresholds.shape[0] == n_features
+        print('Estimated thresholds {}'.format(thresholds))
+        return thresholds
 
-    #     embs = np.zeros(last_layer_embeddings.shape, dtype=last_layer_embeddings.dtype)
+    def predict(self, embeddings, threshold=None, data=None, feature_wise=False):
+        """
+        Returning the predictions of the decoder (\hat(x))
+        given the last hidden layer embeddings
 
-    #     print('output: {}'.format(output_probs))
-    #     print('preds: {}'.format(preds))
+        Either a threshold must be given,
+        or a training set on which to compute the threshold
+        """
 
-    #     rng = np.random.mtrand.RandomState(self.seed_generator.get())
+        assert threshold is not None or data is not None
+        #
+        # taking only the last layer embeddings, assuming them to be ordered to be the last
+        n_last_layer_neurons = self.layers[-2].n_out
+        ll_embeddings = embeddings[:, -n_last_layer_neurons:].astype(np.float32)
+        print('Taking only last {} activations ({})'.format(n_last_layer_neurons,
+                                                            ll_embeddings.shape))
 
-    #     inv_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     iter_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     p_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     p_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     inv_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     inv_output_probs = np.zeros(output_probs.shape, dtype=output_probs.dtype)
-    #     ainv_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     ainv_sampled_preds = np.zeros(preds.shape, dtype=preds.dtype)
-    #     ainv_output_probs = np.zeros(output_probs.shape, dtype=output_probs.dtype)
-    #     print(swap_order)
+        #
+        # predicting the output probabilities give the last hidden layer embeddings
+        pred_probs = self.predict_probs(ll_embeddings)
 
-    #     # for i in range(input_size):
-    #     #     inv_swap = np.where(swap_order == i)[0][0]
-    #     #     out = self.use(samples, False)
-    #     #     rng.binomial(p=out[:, inv_swap], n=1)
-    #     #     samples[:, inv_swap] = rng.binomial(p=out[:, inv_swap], n=1)
+        #
+        # computing the threshold?
+        if threshold is None:
+            threshold = self.estimate_threshold_(pred_probs, data, feature_wise=feature_wise)
 
-    #     for i in range(input_size):
-    #         inv_swap = np.where(swap_order == i)[0][0]
-    #         o, p = self.predict_func(embs, threshold)
-    #         embs[:, inv_swap] = last_layer_embeddings[:, inv_swap]
-    #         iter_preds[:, inv_swap] = rng.binomial(p=o[:, inv_swap], n=1)
-
-    #         print('i {} inv {}'.format(i, inv_swap))
-    #         inv_preds[:, i] = preds[:, inv_swap]
-    #         inv_output_probs[:, i] = output_probs[:, inv_swap]
-    #         inv_sampled_preds[:, i] = rng.binomial(p=output_probs[:, inv_swap], n=1)
-    #         ainv_preds[:, inv_swap] = preds[:, i]
-    #         ainv_output_probs[:, inv_swap] = output_probs[:, i]
-    #         ainv_sampled_preds[:, inv_swap] = rng.binomial(p=output_probs[:, i], n=1)
-    #         sampled_preds[:, i] = rng.binomial(p=output_probs[:, i], n=1)
-    #         p_sampled_preds[:, inv_swap] = rng.binomial(p=output_probs[:, inv_swap], n=1)
-    #         p_preds[:, inv_swap] = preds[:, inv_swap]
-    #     print('inv output: {}'.format(inv_output_probs))
-    #     print('inv preds: {}'.format(inv_preds))
-    #     print('inv sampled preds: {}'.format(inv_sampled_preds))
-    #     print(inv_preds[:10])
-
-    # return preds, inv_preds, sampled_preds, inv_sampled_preds, p_preds,
-    # p_sampled_preds, ainv_preds, ainv_sampled_preds, iter_preds
+        #
+        # make predictions and return the threshold as well
+        return threshold, self.threshold_probs(pred_probs, threshold)

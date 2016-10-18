@@ -12,7 +12,7 @@ except:
     perf_counter = time
 
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+# from numpy.testing import assert_array_almost_equal
 import theano
 import theano.tensor.nnet.nnet
 from scipy.misc import logsumexp
@@ -43,7 +43,8 @@ def get_mean_error_and_std(model, error_fnc, set_size, shuffle_mask, shuffling_t
     return round(losses.mean(), 6), round(losses.std() / np.sqrt(losses.shape[0]), 6)
 
 
-def get_mean_error_and_std_final(model, error_fnc, set_size, shuffle_mask, shuffling_type, nb_shuffle=1):
+def get_mean_error_and_std_final(model, error_fnc, set_size, shuffle_mask, shuffling_type,
+                                 nb_shuffle=1):
     if shuffle_mask > 0:
         nb_shuffle = shuffle_mask + 1
 
@@ -67,7 +68,16 @@ def get_mean_error_and_std_final(model, error_fnc, set_size, shuffle_mask, shuff
     return round(losses.mean(), 6), round(losses.std() / np.sqrt(losses.shape[0]), 6)
 
 
-def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, max_epochs, batch_size, shuffling_type, save_model_path=None, trainer_status=None):
+def train_model(model,
+                dataset,
+                look_ahead,
+                shuffle_mask,
+                nb_shuffle_per_valid,
+                max_epochs,
+                batch_size,
+                shuffling_type,
+                save_model_path=None,
+                trainer_status=None):
     start_training_time = t.time()
 
     if trainer_status is None:
@@ -86,7 +96,8 @@ def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, 
         model.shuffle(shuffling_type)
 
     print('\n### Training MADE ###')
-    while(trainer_status["epoch"] < max_epochs and trainer_status["nb_of_epocs_without_improvement"] < look_ahead):
+    while(trainer_status["epoch"] < max_epochs and
+          trainer_status["nb_of_epocs_without_improvement"] < look_ahead):
         trainer_status["epoch"] += 1
 
         print('Epoch {0} (Batch Size {1})'.format(trainer_status["epoch"], batch_size))
@@ -112,8 +123,12 @@ def train_model(model, dataset, look_ahead, shuffle_mask, nb_shuffle_per_valid, 
         start_time = t.time()
         if shuffle_mask > 0:
             model.reset(shuffling_type)
-        valid_err, valid_err_std = get_mean_error_and_std(model, model.valid_log_prob, dataset['valid'][
-                                                          'length'], shuffle_mask, shuffling_type, nb_shuffle_per_valid)
+        valid_err, valid_err_std = get_mean_error_and_std(model,
+                                                          model.valid_log_prob,
+                                                          dataset['valid']['length'],
+                                                          shuffle_mask,
+                                                          shuffling_type,
+                                                          nb_shuffle_per_valid)
         if shuffle_mask > 0:
             model.reset(shuffling_type, trainer_status["nb_shuffles"])
         print(utils.get_done_text(start_time), " NLL: {0:.6f}".format(valid_err))
@@ -159,9 +174,18 @@ def build_model(dataset, trainingparams, hyperparams, hidden_sizes):
 def build_model_layer_pretraining(dataset, trainingparams, hyperparams, max_epochs):
 
     print('\n#### Pretraining layer {} ####'.format(1), end=' ')
-    model = build_model(dataset, trainingparams, hyperparams, hyperparams['hidden_sizes'][:1])
-    best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams[
-                                                           'shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
+    model = build_model(dataset,
+                        trainingparams,
+                        hyperparams,
+                        hyperparams['hidden_sizes'][:1])
+    best_model, best_epoch, total_train_time = train_model(model,
+                                                           dataset,
+                                                           trainingparams['look_ahead'],
+                                                           trainingparams['shuffle_mask'],
+                                                           trainingparams['nb_shuffle_per_valid'],
+                                                           max_epochs,
+                                                           trainingparams['batch_size'],
+                                                           trainingparams['shuffling_type'])
 
     for i in range(2, len(hyperparams['hidden_sizes']) + 1):
         print('\n#### Pretraining layer {} ####'.format(i), end=' ')
@@ -179,8 +203,15 @@ def build_model_layer_pretraining(dataset, trainingparams, hyperparams, max_epoc
                 model.layers[-
                              1].params[paramIdx].set_value(best_model.layers[-1].params[paramIdx].get_value())
 
-        best_model, best_epoch, total_train_time = train_model(model, dataset, trainingparams['look_ahead'], trainingparams[
-                                                               'shuffle_mask'], trainingparams['nb_shuffle_per_valid'], max_epochs, trainingparams['batch_size'], trainingparams['shuffling_type'])
+        best_model, best_epoch, total_train_time = train_model(model,
+                                                               dataset,
+                                                               trainingparams['look_ahead'],
+                                                               trainingparams['shuffle_mask'],
+                                                               trainingparams[
+                                                                   'nb_shuffle_per_valid'],
+                                                               max_epochs,
+                                                               trainingparams['batch_size'],
+                                                               trainingparams['shuffling_type'])
 
     return best_model
 
@@ -459,15 +490,19 @@ if __name__ == '__main__':
         #
         # take them all?
         layer_ids = None
+        ll_str = None
         if args.last_layer_embeddings:
             layer_ids = [len(model.layers[:-1]) - 1]
+            ll_str = '.ll'
         else:
             layer_ids = [i for i in range(len(model.layers[:-1]))]
+            ll_str = ''
 
         print('Considering only layers {} for embeddings'.format(layer_ids))
 
         repr_save_path = os.path.join(args.embeddings,
-                                      'made.{}.repr-data.pklz'.format(experiment_name))
+                                      'made.{}{}.repr-data.pklz'.format(experiment_name,
+                                                                        ll_str))
         repr_data = []
 
         for dataset_split in ['train', 'valid', 'test']:
@@ -492,47 +527,40 @@ if __name__ == '__main__':
             # assert_array_almost_equal(repr_split, repr_split2)
 
             repr_data.append(repr_split)
-            #
-            # saving it
+        #
+        # saving it
         with gzip.open(repr_save_path, 'wb') as f:
             print('Saving splits to {}'.format(repr_save_path))
             pickle.dump(repr_data, f, protocol=4)
 
-        # #
-        # # getting last layer
-        # lle = repr_data[0][:, -500:].astype(theano.config.floatX)
-        # threshold = 0.5
-        # p, inv_p, sp, inv_sp, pp, psp, ainv_p, ainv_sp, i_sp = model.predict(lle, threshold)
+        #
+        # predicting
+        print('Predicting...')
+        from sklearn.metrics import accuracy_score
+        from sklearn.metrics import hamming_loss
+        from sklearn.metrics import zero_one_loss
+        from sklearn.metrics import jaccard_similarity_score
 
-        # # p2, inv_p2, sp2, inv_sp2, pp2, psp2, ainv_p2, ainv_sp2, i_sp2 = model2.predict(lle,
-        # #                                                                                threshold)
+        #
+        # first on train
+        train = dataset['train']['data'].get_value()
+        th, preds = model.predict(repr_data[0], threshold=None,
+                                  data=train,
+                                  feature_wise=True)
 
-        # # assert_array_almost_equal(p, p2)
-        # # assert_array_almost_equal(inv_p, inv_p2)
-        # # assert_array_almost_equal(sp, sp2)
-        # # assert_array_almost_equal(pp, pp2)
-        # # assert_array_almost_equal(ainv_p, ainv_p2)
-        # # assert_array_almost_equal(inv_sp, inv_sp2)
-        # # assert_array_almost_equal(i_sp, i_sp2)
+        print('train\n', train[:20].astype(int))
+        print('preds\n', preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(train, preds)))
+        print('ham: {}'.format(1 - hamming_loss(train, preds)))
+        print('exa: {}'.format(1 - zero_one_loss(train, preds)))
 
-        # print(model.use(dataset['train']['data'].get_value()[:10], False)[:10])
-        # print('data')
-        # print(dataset['train']['data'].get_value()[:10].astype(int))
-        # print('p')
-        # print(p[:10])
-        # print('inv p')
-        # print(inv_p[:10])
-        # print('ainv p')
-        # print(ainv_p[:10])
-        # print('sp')
-        # print(sp[:10])
-        # print('inv sp')
-        # print(inv_sp[:10])
-        # print('ainv sp')
-        # print(ainv_sp[:10])
-        # print('pp')
-        # print(pp[:10])
-        # print('psp')
-        # print(psp[:10])
-        # print('iter sp')
-        # print(i_sp[:10])
+        valid = dataset['valid']['data'].get_value()
+        _th, valid_preds = model.predict(repr_data[1],
+                                         threshold=th,
+                                         feature_wise=True)
+
+        print('valid\n', valid[:20].astype(int))
+        print('preds\n', valid_preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(valid, valid_preds)))
+        print('ham: {}'.format(1 - hamming_loss(valid, valid_preds)))
+        print('exa: {}'.format(1 - zero_one_loss(valid, valid_preds)))
