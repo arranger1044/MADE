@@ -106,6 +106,7 @@ class MADE(object):
         pre_output = self.layers[-1].lin_output
         log_prob = - \
             T.sum(T.nnet.softplus(-target * pre_output + (1 - target) * pre_output), axis=1)
+        # log_prob = T.sum(target * T.log(output) + (1 - target) * T.log(1 - output), axis=1)
         loss = (-log_prob).mean()
 
         # How to update the parameters
@@ -211,7 +212,7 @@ class MADE(object):
             thresholded_output = T.switch(output_probs < pred_threshold, 0, 1)
 
             self.predict_probs = theano.function(name='predict_probs',
-                                                 inputs=[last_layer_embeddings],
+                                                 inputs=[last_layer_embeddings, is_train],
                                                  outputs=pred_probs,
                                                  givens={self.layers[-1].input:
                                                          last_layer_embeddings},
@@ -319,13 +320,14 @@ class MADE(object):
 
         n_points = n_samples * n_features
 
+        print('p', n_points, n_samples, n_features)
         if not feature_wise:
             #
             # flatten and sort probs
             sorted_probs_array = np.sort(probs, axis=None)
             #
             # compute proportion of zeros in data
-            n_zeros = int(n_points - data.sum())
+            n_zeros = min(int(n_points - data.sum()), n_points - 1)
             #
             #
             threshold = sorted_probs_array[n_zeros]
@@ -336,7 +338,8 @@ class MADE(object):
             sorted_probs_array = np.sort(probs, axis=0)
             #
             # compute proportion of zeros in data
-            n_zeros = (n_samples - data.sum(axis=0)).astype(int)
+            n_zeros = np.minimum((n_samples - data.sum(axis=0)).astype(int),
+                                 n_samples - 1)
             print(n_zeros.shape, n_zeros, data.sum(axis=0))
             thresholds = sorted_probs_array[n_zeros, np.arange(n_features)]
 
@@ -363,7 +366,7 @@ class MADE(object):
 
         #
         # predicting the output probabilities give the last hidden layer embeddings
-        pred_probs = self.predict_probs(ll_embeddings)
+        pred_probs = self.predict_probs(ll_embeddings, False)
 
         #
         # computing the threshold?

@@ -543,23 +543,74 @@ if __name__ == '__main__':
 
         #
         # first on train
-        train = dataset['train']['data'].get_value()
+        train = dataset['train']['data'].get_value().astype(int)
+        valid = dataset['valid']['data'].get_value().astype(int)
+
         th, preds = model.predict(repr_data[0], threshold=None,
                                   data=train,
                                   feature_wise=True)
 
-        print('train\n', train[:20].astype(int))
+        print('train\n', train[:20])
         print('preds\n', preds[:20])
         print('jac: {}'.format(jaccard_similarity_score(train, preds)))
         print('ham: {}'.format(1 - hamming_loss(train, preds)))
         print('exa: {}'.format(1 - zero_one_loss(train, preds)))
 
-        valid = dataset['valid']['data'].get_value()
         _th, valid_preds = model.predict(repr_data[1],
                                          threshold=th,
                                          feature_wise=True)
 
-        print('valid\n', valid[:20].astype(int))
+        print('valid\n', valid[:20])
+        print('preds\n', valid_preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(valid, valid_preds)))
+        print('ham: {}'.format(1 - hamming_loss(valid, valid_preds)))
+        print('exa: {}'.format(1 - zero_one_loss(valid, valid_preds)))
+
+        #
+        #
+        print('\nglobal threshold')
+        #
+        # first on train
+        th, preds = model.predict(repr_data[0], threshold=None,
+                                  data=train,
+                                  feature_wise=False)
+
+        print('train\n', train[:20])
+        print('preds\n', preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(train, preds)))
+        print('ham: {}'.format(1 - hamming_loss(train, preds)))
+        print('exa: {}'.format(1 - zero_one_loss(train, preds)))
+
+        _th, valid_preds = model.predict(repr_data[1],
+                                         threshold=th,
+                                         feature_wise=False)
+
+        print('valid\n', valid[:20])
+        print('preds\n', valid_preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(valid, valid_preds)))
+        print('ham: {}'.format(1 - hamming_loss(valid, valid_preds)))
+        print('exa: {}'.format(1 - zero_one_loss(valid, valid_preds)))
+
+        #
+        #
+        print('\n0.5 threshold')
+        g = np.array([0.5 for i in range(train.shape[1])]).astype(np.float32)
+
+        th, preds = model.predict(repr_data[0], threshold=g,
+                                  data=None,
+                                  feature_wise=False)
+
+        print('train\n', train[:20])
+        print('preds\n', preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(train, preds)))
+        print('ham: {}'.format(1 - hamming_loss(train, preds)))
+        print('exa: {}'.format(1 - zero_one_loss(train, preds)))
+
+        _th, valid_preds = model.predict(repr_data[1],
+                                         threshold=g,
+                                         feature_wise=False)
+
+        print('valid\n', valid[:20])
         print('preds\n', valid_preds[:20])
         print('jac: {}'.format(jaccard_similarity_score(valid, valid_preds)))
         print('ham: {}'.format(1 - hamming_loss(valid, valid_preds)))
