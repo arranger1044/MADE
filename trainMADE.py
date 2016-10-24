@@ -264,6 +264,65 @@ def extract_embeddings(model,
     return repr_data, feature_indexes
 
 
+def extract_embeddings_ensemble(model,
+                                dataset,
+                                n_instances,
+                                shuffle_mask,
+                                shuffling_type,
+                                nb_shuffle=1,
+                                batch_size=100,
+                                layer_ids=[0, 1, 2],
+                                dtype=float):
+
+    if shuffle_mask > 0:
+        nb_shuffle = shuffle_mask + 1
+
+    if not shuffle_mask:
+        nb_shuffle = 1
+
+    # embedding_sizes = [layer.n_out for layer in model.layers[:-1]]
+    embedding_sizes = [model.layers[j].n_out for j in layer_ids]
+    embedding_size = sum(embedding_sizes)
+    feature_indexes = [0]
+    for j, size in enumerate(embedding_sizes):
+        feature_indexes += [size + feature_indexes[j]]
+
+    print('\nTransforming data {} -> {} {}\n\t(layer embedding sizes {} )'.format(dataset.shape[1],
+                                                                                  embedding_size,
+                                                                                  feature_indexes,
+                                                                                  embedding_sizes))
+    repr_data = np.zeros((n_instances, embedding_size, nb_shuffle), dtype=dtype)
+    repr_data[:] = np.nan
+
+    nb_iterations = int(np.ceil(n_instances / batch_size))
+    emb_data_start_t = perf_counter()
+    for index in range(nb_iterations):
+        emb_start_t = perf_counter()
+        data_split = dataset[index * batch_size:(index + 1) * batch_size]
+        for j in range(len(layer_ids)):
+            # print('\t\tchecking j {} feature_indexes {}:{} layer_ids {}'.format(j,
+            #                                                                     feature_indexes[
+            #                                                                         j],
+            #                                                                     feature_indexes[
+            #                                                                         j + 1],
+            #                                                                     layer_ids[j]))
+            repr_data[index * batch_size:(index + 1) * batch_size,
+                      feature_indexes[j]:feature_indexes[j + 1], :] = \
+                model.embeddings_ensemble(data_split,
+                                          layer_ids[j],
+                                          shuffle_mask, shuffling_type, nb_shuffle)
+        emb_end_t = perf_counter()
+        print('Processed batch {}/{} in {} secs'.format(index + 1,
+                                                        nb_iterations,
+                                                        emb_end_t - emb_start_t),
+              end='                \r')
+    emb_data_end_t = perf_counter()
+    print('All dataset processed in {} secs'.format(emb_data_end_t - emb_data_start_t))
+
+    assert not np.isnan(repr_data).any()
+    return repr_data, feature_indexes
+
+
 def parse_args(args):
     import argparse
 
@@ -476,8 +535,8 @@ if __name__ == '__main__':
     utils.write_result(dataset_name, model_info, experiment_name)
 
     if args.save_model:
-        model_save_path = os.path.join(args.save_model, 'made.{}.{}.model'.format(dataset_name,
-                                                                                  experiment_name))
+        model_save_path = os.path.join(args.save_model,
+                                       'made.{}.model.pklz'.format(experiment_name))
         os.makedirs(args.save_model, exist_ok=True)
         model.to_pickle(model_save_path)
 
@@ -609,6 +668,56 @@ if __name__ == '__main__':
         _th, valid_preds = model.predict(repr_data[1],
                                          threshold=g,
                                          feature_wise=False)
+
+        print('valid\n', valid[:20])
+        print('preds\n', valid_preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(valid, valid_preds)))
+        print('ham: {}'.format(1 - hamming_loss(valid, valid_preds)))
+        print('exa: {}'.format(1 - zero_one_loss(valid, valid_preds)))
+
+        print('\n\nmultiple embeddings')
+
+        repr_data_ens = []
+
+        for dataset_split in ['train', 'valid', 'test']:
+
+            split = dataset[dataset_split]['data'].get_value()
+            print('\nProcessing split {} {}'.format(dataset_split,
+                                                    dataset[dataset_split]['length']))
+            repr_split_ens, f = extract_embeddings_ensemble(model,
+                                                            split,
+                                                            dataset[dataset_split]['length'],
+                                                            trainingparams['shuffle_mask'],
+                                                            trainingparams['shuffling_type'],
+                                                            nb_shuffle=1,
+                                                            batch_size=100,
+                                                            layer_ids=layer_ids,
+                                                            dtype=float)
+
+            repr_data_ens.append(repr_split_ens)
+
+        print('multiple predictions')
+
+        th, preds = model.predict_ensemble(repr_data_ens[0], threshold=g,
+                                           data=None,
+                                           feature_wise=False,
+                                           shuffle_mask=trainingparams['shuffle_mask'],
+                                           shuffling_type=trainingparams['shuffling_type'],
+                                           nb_shuffle=1)
+
+        print('train\n', train[:20])
+        print('preds\n', preds[:20])
+        print('jac: {}'.format(jaccard_similarity_score(train, preds)))
+        print('ham: {}'.format(1 - hamming_loss(train, preds)))
+        print('exa: {}'.format(1 - zero_one_loss(train, preds)))
+
+        _th, valid_preds = model.predict_ensemble(repr_data_ens[1],
+                                                  threshold=g,
+                                                  data=None,
+                                                  feature_wise=False,
+                                                  shuffle_mask=trainingparams['shuffle_mask'],
+                                                  shuffling_type=trainingparams['shuffling_type'],
+                                                  nb_shuffle=1)
 
         print('valid\n', valid[:20])
         print('preds\n', valid_preds[:20])

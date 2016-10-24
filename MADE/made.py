@@ -15,6 +15,21 @@ from .mask_generator import MaskGenerator
 from .weights_initializer import WeightsInitializer
 
 
+def majority_ensemble(preds_tensor):
+
+    ens_preds = np.zeros((preds_tensor.shape[0],
+                          preds_tensor.shape[1]), dtype=preds_tensor.dtype)
+
+    for i in range(preds_tensor.shape[0]):
+        for j in range(preds_tensor.shape[1]):
+            p_j_ens = preds_tensor[i, j]
+            values, counts = np.unique(p_j_ens, return_counts=True)
+            mode_ind = np.argmax(counts)
+            ens_preds[i, j] = values[mode_ind]
+
+    return ens_preds
+
+
 class SeedGenerator(object):
     # This subclass purpose is to maximize randomness and still keep reproducibility
 
@@ -281,6 +296,32 @@ class MADE(object):
         emb = self.embedding_funcs[layer_id](input, False)
         return emb
 
+    def embeddings_ensemble(self, input, layer_id, shuffle_mask, shuffling_type, nb_shuffle=1):
+        """
+        Return the embedding representation of input as the activations
+        of the neurons in layer specified by layer_id
+        one for each shuffling
+        """
+
+        if shuffle_mask > 0:
+            self.reset(shuffling_type)
+
+        if shuffle_mask > 0:
+            nb_shuffle = shuffle_mask + 1
+
+        if not shuffle_mask:
+            nb_shuffle = 1
+
+        embeddings = []
+        for i in range(nb_shuffle):
+            if shuffle_mask:
+                self.shuffle(shuffling_type)
+
+            emb = self.embedding_funcs[layer_id](input, False)
+            embeddings.append(emb)
+
+        return np.dstack(embeddings)
+
     def to_pickle(self, file_path, compress=True):
         """
         Exporting the theano model to a (possibly compressed) pickle file
@@ -366,6 +407,7 @@ class MADE(object):
 
         #
         # predicting the output probabilities give the last hidden layer embeddings
+        print(ll_embeddings.shape)
         pred_probs = self.predict_probs(ll_embeddings, False)
 
         #
@@ -376,3 +418,30 @@ class MADE(object):
         #
         # make predictions and return the threshold as well
         return threshold, self.threshold_probs(pred_probs, threshold)
+
+    def predict_ensemble(self, embeddings, threshold, data, feature_wise,
+                         shuffle_mask, shuffling_type, nb_shuffle=1):
+        if shuffle_mask > 0:
+            self.reset(shuffling_type)
+
+        if shuffle_mask > 0:
+            nb_shuffle = shuffle_mask + 1
+
+        if not shuffle_mask:
+            nb_shuffle = 1
+
+        predictions = []
+        for i in range(nb_shuffle):
+            if shuffle_mask:
+                self.shuffle(shuffling_type)
+
+            emb = embeddings[:, :, i]
+
+            th, preds = self.predict(emb, threshold, data, feature_wise)
+            predictions.append(preds)
+
+        preds_tensor = np.dstack(predictions)
+
+        #
+        # taking the most voted prediction
+        return threshold, majority_ensemble(preds_tensor)
