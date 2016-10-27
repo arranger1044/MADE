@@ -29,6 +29,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import Ridge
 from sklearn.linear_model import RidgeClassifier
 from sklearn.linear_model import MultiTaskLasso
+from sklearn.neighbors import KNeighborsClassifier
 from multioutput import MultiOutputRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import neighbors
@@ -434,7 +435,23 @@ def decode_predictions(repr_preds, made_model, n_features):
     #
     # 0.5 threshold threshold
     th = numpy.array([0.5 for i in range(n_features)]).astype(numpy.float32)
-    dec_preds = made_model.predict(repr_preds, threshold=th)
+    th_, dec_preds = made_model.predict(repr_preds, threshold=th)
+
+    return dec_preds
+
+
+def decode_predictions_knn(preds, embeds, embeds_labels, **knn_wargs):
+    knnc = KNeighborsClassifier(**knn_wargs)
+
+    fit_start_t = perf_counter()
+    knnc.fit(embeds, embeds_labels)
+    fit_end_t = perf_counter()
+    logging.info('\n\t\tKNN fitted in {} secs'.format(fit_end_t - fit_start_t))
+
+    predict_start_t = perf_counter()
+    dec_preds = knnc.predict(preds)
+    predict_end_t = perf_counter()
+    logging.info('\t\t\tprediction done in {} secs'.format(predict_end_t - predict_start_t))
 
     return dec_preds
 
@@ -521,6 +538,10 @@ parser.add_argument('--repr-y-dtype', type=str, nargs='?',
 parser.add_argument('--decode-model', type=str,
                     help='Spn model file path for decoding (or path to spn models dir when --cv)')
 
+parser.add_argument('--knn-decode', type=str, nargs='?',
+                    help='Additional sklearn knn parameters in the for of a list' +
+                    ' "[name1=val1,..,namek=valk]"')
+
 parser.add_argument('--seed', type=int, nargs='?',
                     default=1337,
                     help='Seed for the random generator')
@@ -593,11 +614,8 @@ parser.add_argument('--save-text', action='store_true',
 args = parser.parse_args()
 
 decode = False
-if args.repr_y is not None:
-    decode = True
+knn_sklearn_args = None
 
-    if args.decode_model is None:
-        raise ValueError('Missing model to decode data')
 #
 # setting verbosity level
 if args.verbose == 1:
@@ -606,6 +624,30 @@ elif args.verbose == 2:
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 logging.info("Starting with arguments:\n%s", args)
+
+
+if args.repr_y is not None:
+    decode = True
+
+    if args.decode_model is None:
+        raise ValueError('Missing model to decode data')
+
+    if args.knn_decode is not None:
+        sklearn_key_value_pairs = args.knn_decode.translate(
+            {ord('['): '', ord(']'): ''}).split(',')
+        knn_sklearn_args = {key.strip(): value.strip() for key, value in
+                            [pair.strip().split('=')
+                             for pair in sklearn_key_value_pairs]}
+        if 'n_neighbors' in knn_sklearn_args:
+            knn_sklearn_args['n_neighbors'] = int(knn_sklearn_args['n_neighbors'])
+        if 'n_jobs' in knn_sklearn_args:
+            knn_sklearn_args['n_jobs'] = int(knn_sklearn_args['n_jobs'])
+        if 'p' in knn_sklearn_args:
+            knn_sklearn_args['p'] = int(knn_sklearn_args['p'])
+    else:
+        knn_sklearn_args = {}
+    logging.info('KNN sklearn args: {}'.format(knn_sklearn_args))
+
 
 #
 # loading the dataset splits
@@ -852,8 +894,9 @@ if args.preprocess:
 made_fold_models = None
 # feature_fold_infos = None
 if decode:
-    made_fold_models = [load_made_model(args.decode_model, f, args.suffix)
-                        for f in range(len(labelled_splits))]
+    if not args.knn_decode:
+        made_fold_models = [load_made_model(args.decode_model, f, args.suffix)
+                            for f in range(len(labelled_splits))]
     # feature_fold_infos = [load_feature_info_fold(args.repr_y, f)
     #                       for f in range(len(labelled_splits))]
 
@@ -927,6 +970,7 @@ with open(out_log_path, 'w') as out_log:
                     clf = CLASSIFIER_DICT[args.classifier](c)
 
                     train_x, train_y = sel_labelled_splits[f][0]
+                    true_train_x, true_train_y = fold_splits[f][0]
 
                     #
                     # fitting
@@ -948,10 +992,16 @@ with open(out_log_path, 'w') as out_log:
                             split_e_t = perf_counter()
 
                             if decode:
-                                split_preds = decode_predictions(split_preds,
-                                                                 # feature_fold_infos[f],
-                                                                 made_fold_models[f],
-                                                                 split_y.shape[1])
+                                if args.knn_decode:
+                                    split_preds = decode_predictions_knn(split_preds,
+                                                                         train_y,
+                                                                         true_train_y,
+                                                                         **knn_sklearn_args)
+                                else:
+                                    split_preds = decode_predictions(split_preds,
+                                                                     # feature_fold_infos[f],
+                                                                     made_fold_models[f],
+                                                                     split_y.shape[1])
                                 assert split_preds.shape[0] == split_x.shape[0]
                                 assert split_preds.shape[1] == split_y.shape[1]
 
@@ -1126,6 +1176,7 @@ with open(out_log_path, 'w') as out_log:
                 fold_models[p].append(clf)
 
                 train_x, train_y = fold[0]
+                true_train_x, true_train_y = fold_splits[f][0]
 
                 #
                 # fitting the classifier
@@ -1147,10 +1198,16 @@ with open(out_log_path, 'w') as out_log:
                         split_e_t = perf_counter()
 
                         if decode:
-                            split_preds = decode_predictions(split_preds,
-                                                             # feature_fold_infos[f],
-                                                             made_fold_models[f],
-                                                             true_split_y.shape[1])
+                            if args.knn_decode:
+                                split_preds = decode_predictions_knn(split_preds,
+                                                                     train_y,
+                                                                     true_train_y,
+                                                                     **knn_sklearn_args)
+                            else:
+                                split_preds = decode_predictions(split_preds,
+                                                                 # feature_fold_infos[f],
+                                                                 made_fold_models[f],
+                                                                 true_split_y.shape[1])
                             assert split_preds.shape[0] == split_x.shape[0]
                             assert split_preds.shape[1] == true_split_y.shape[1]
 
