@@ -72,11 +72,12 @@ def stringify(x):
 
 CLUSTER_PYTHON_INTERPRETER = '/home/avergari/.local/bin/ipython'
 PYTHON_STR = 'ipython'
-MADE_TRAIN_STR = 'THEANO_FLAGS=mode=FAST_RUN,device=cuda,floatX=float32 {python} -- trainMADE.py {dataset} {params}'
+# MADE_TRAIN_STR = 'THEANO_FLAGS=mode=FAST_RUN,device=cuda,floatX=float32 {python} -- trainMADE.py {dataset} {params}'
+MADE_TRAIN_STR = 'THEANO_FLAGS=mode=FAST_RUN,device=cuda,floatX=float32 {python} -- trainMADE.py {params}'
 
 
 def grid_search(python_int,
-                dataset,
+                datasets,
                 learning_rate_values,
                 decrease_constant_values,
                 max_epochs_values,
@@ -101,26 +102,28 @@ def grid_search(python_int,
     i = 0
     #
     # create a product
-    for p, prod in enumerate(itertools.product(learning_rate_values,
-                                               decrease_constant_values,
-                                               max_epochs_values,
-                                               shuffle_mask_values,
-                                               shuffling_type_values,
-                                               nb_shuffle_per_valid_values,
-                                               batch_size_values,
-                                               look_ahead_values,
-                                               pre_training_values,
-                                               pre_training_max_epoc_values,
-                                               update_rule_values,
-                                               dropout_rate_values,
-                                               hidden_sizes_values,
-                                               random_seed_values,
-                                               use_cond_mask_values,
-                                               direct_input_connect_values,
-                                               direct_output_connect_values,
-                                               hidden_activation_values,
-                                               weights_initialization_values,
-                                               mask_distribution_values)):
+    configs = list(itertools.product(datasets,
+                                     learning_rate_values,
+                                     decrease_constant_values,
+                                     max_epochs_values,
+                                     shuffle_mask_values,
+                                     shuffling_type_values,
+                                     nb_shuffle_per_valid_values,
+                                     batch_size_values,
+                                     look_ahead_values,
+                                     pre_training_values,
+                                     pre_training_max_epoc_values,
+                                     update_rule_values,
+                                     dropout_rate_values,
+                                     hidden_sizes_values,
+                                     random_seed_values,
+                                     use_cond_mask_values,
+                                     direct_input_connect_values,
+                                     direct_output_connect_values,
+                                     hidden_activation_values,
+                                     weights_initialization_values,
+                                     mask_distribution_values))
+    for p, prod in enumerate(configs):
 
         #
         # # unpacking
@@ -132,16 +135,16 @@ def grid_search(python_int,
         #     direct_input_connect, direct_output_connect, hidden_activation, \
         #     weight_initialization, mask_distribution = prod
 
-        params_str = " ".join([str(p) for p in prod])
+        params_str = " ".join([str(pa) for pa in prod])
         train_str = MADE_TRAIN_STR.format(python=python_int,
-                                          dataset=dataset,
+                                          # dataset=dataset,
                                           params=params_str)
         print(train_str)
         #
         # calling trainMADE as a process
         i += 1
 
-        cluster_script_name = '{}-{}'.format(CLUSTER_SCRIPT_FILENAME, p)
+        cluster_script_name = '{}-{}-{}'.format(CLUSTER_SCRIPT_FILENAME, prod[0], p)
         cluster_cmds = copy(CLUSTER_SCRIPT_TEMPLATE)
         # cluster_args = cluster_args.replace('"', '\\"')
         cluster_args = '"{}"'.format(train_str)
@@ -159,14 +162,14 @@ def grid_search(python_int,
     with open(genexp_file_path, 'w') as f:
         for p in range(i):
             f.write('condor_submit_bid {} ./{}\n'.format(BID,
-                                                         os.path.join(OUT_DIR, '{}-{}.sub'.format(CLUSTER_SCRIPT_FILENAME, p))))
+                                                         os.path.join(OUT_DIR, '{}-{}-{}.sub'.format(CLUSTER_SCRIPT_FILENAME, configs[p][0], p))))
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Train the MADE model.')
 
-    parser.add_argument('dataset_name')
+    parser.add_argument('dataset_name', nargs='+')
     parser.add_argument('--learning_rate', type=float, nargs='+', default=LEARNING_RATES)
     parser.add_argument('--decrease_constant', type=float, nargs='+', default=DECREASE_CONSTANTS)
     parser.add_argument('--max_epochs', type=int, nargs='+',  default=MAX_EPOCHS)
