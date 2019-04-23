@@ -407,12 +407,13 @@ def save_model_params(model, model_path):
 
 
 def load_model_params(model, model_path):
-    saved_parameters = np.load(os.path.join(model_path, "params.npz"))
+    saved_parameters = np.load(os.path.join(model_path, "params.npz"), allow_pickle=True)
     for i, param in enumerate(saved_parameters['arr_0']):
         model.parameters[i].set_value(param.get_value())
 
     for i, param in enumerate(saved_parameters['arr_1']):
         model.update_rule.parameters[i].set_value(param.get_value())
+
 
 activation_functions = {
     "sigmoid": theano.tensor.nnet.sigmoid,
