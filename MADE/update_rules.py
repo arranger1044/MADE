@@ -2,7 +2,8 @@ from __future__ import division
 import numpy as np
 import theano
 import theano.tensor as T
-from theano.compat.python2x import OrderedDict
+# from theano.compat.python2x import OrderedDict
+from collections import OrderedDict
 """
 Some/most of those were inspired/taken from https://github.com/lisa-lab/pylearn2.
 """

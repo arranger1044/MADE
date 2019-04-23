@@ -91,9 +91,12 @@ class Dataset(object):
         raw_dataset = np.load(os.path.join("datasets", dataset_name) + ".npz")
         full_dataset = {'input_size': raw_dataset['inputsize']}
 
-        trainset_theano = theano.shared(value=raw_dataset['train_data'], borrow=True)
-        validset_theano = theano.shared(value=raw_dataset['valid_data'], borrow=True)
-        testset_theano = theano.shared(value=raw_dataset['test_data'], borrow=True)
+        trainset_theano = theano.shared(value=raw_dataset['train_data'].astype(
+            dtype=theano.config.floatX), borrow=True)
+        validset_theano = theano.shared(value=raw_dataset['valid_data'].astype(
+            dtype=theano.config.floatX), borrow=True)
+        testset_theano = theano.shared(value=raw_dataset['test_data'].astype(
+            dtype=theano.config.floatX), borrow=True)
 
         full_dataset['train'] = {'data': trainset_theano, 'length': raw_dataset['train_length']}
         full_dataset['valid'] = {'data': validset_theano, 'length': raw_dataset['valid_length']}
