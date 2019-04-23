@@ -72,7 +72,7 @@ def stringify(x):
 
 CLUSTER_PYTHON_INTERPRETER = '/home/avergari/.local/bin/ipython'
 PYTHON_STR = 'ipython'
-MADE_TRAIN_STR = '{python} -u trainMADE.py {dataset} {params}'
+MADE_TRAIN_STR = '{python} -- trainMADE.py {dataset} {params}'
 
 
 def grid_search(python_int,
